@@ -6,4 +6,5 @@ public class AuthenticatedUserClaims
     public string TenantId { get; set; } = null!;
     public string Email { get; set; } = null!;
     public string? Name { get; set; } = string.Empty;
+    public string? TenantDisplayName { get; set; } = string.Empty;
 }

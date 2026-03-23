@@ -1,4 +1,4 @@
-﻿using Avalonia.Threading;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -10,6 +10,7 @@ using KeyVaultExplorer.Services;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading;
@@ -26,8 +27,6 @@ public partial class SettingsPageViewModel : ViewModelBase
     private readonly AuthService _authService;
     private readonly KvExplorerDb _dbContext;
     private FluentAvaloniaTheme _faTheme;
-
-    //private static Configuration ConfigFile => ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
 
     [ObservableProperty]
     private string[] appThemes = ["System", "Light", "Dark"];
@@ -48,10 +47,12 @@ public partial class SettingsPageViewModel : ViewModelBase
     private ObservableCollection<Settings> settings;
 
     [ObservableProperty]
-    private bool settingsPageClientIdCheckbox;
+    private ObservableCollection<TenantInfo> availableTenants = [];
 
     [ObservableProperty]
-    private string customClientId;
+    private TenantInfo selectedTenant;
+
+    private bool _isInitializing = true;
 
     public SettingsPageViewModel()
     {
@@ -62,13 +63,29 @@ public partial class SettingsPageViewModel : ViewModelBase
         {
             Version = GetAppVersion();
             var jsonSettings = await GetAppSettings();
-            //var s = await _dbContext.GetToggleSettings();
             ClearClipboardTimeout = jsonSettings.ClipboardTimeout;
             IsBackgroundTransparencyEnabled = jsonSettings.BackgroundTransparency;
             CurrentAppTheme = jsonSettings.AppTheme ?? "System";
-            CustomClientId = jsonSettings.CustomClientId;
-            SettingsPageClientIdCheckbox = jsonSettings.SettingsPageClientIdCheckbox;
-            //NavigationLayoutMode = s.NavigationLayoutMode;
+
+            // Sync tenant list from MainViewModel
+            var mainVm = Defaults.Locator.GetRequiredService<MainViewModel>();
+            AvailableTenants = mainVm.AvailableTenants;
+            SelectedTenant = mainVm.SelectedTenant;
+
+            // Keep in sync when main changes
+            mainVm.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MainViewModel.AvailableTenants))
+                    AvailableTenants = mainVm.AvailableTenants;
+                else if (e.PropertyName == nameof(MainViewModel.SelectedTenant))
+                {
+                    _isInitializing = true;
+                    SelectedTenant = mainVm.SelectedTenant;
+                    _isInitializing = false;
+                }
+            };
+
+            _isInitializing = false;
         }, DispatcherPriority.MaxValue);
     }
 
@@ -93,8 +110,6 @@ public partial class SettingsPageViewModel : ViewModelBase
             FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
             using var writer = new StreamWriter(fs);
             writer.WriteLine(newJson);
-
-            //File.WriteAllText(path, newJson);
         }
     }
 
@@ -117,24 +132,18 @@ public partial class SettingsPageViewModel : ViewModelBase
             Dispatcher.UIThread.InvokeAsync(async () => await AddOrUpdateAppSettings(nameof(AppSettings.AppTheme), CurrentAppTheme), DispatcherPriority.Background);
     }
 
-
-
-    partial void OnSettingsPageClientIdCheckboxChanged(bool value)
+    partial void OnSelectedTenantChanged(TenantInfo value)
     {
-
-        Dispatcher.UIThread.InvokeAsync(async () => 
-            await AddOrUpdateAppSettings(nameof(AppSettings.SettingsPageClientIdCheckbox), SettingsPageClientIdCheckbox),
-        DispatcherPriority.Background);
-    }
-
-    partial void OnCustomClientIdChanged(string value)
-    {
-        Dispatcher.UIThread.InvokeAsync(async () =>
+        if (_isInitializing) return;
+        if (value is not null && value.TenantId != _authService.TenantId)
         {
-            await Task.Delay(50);
-            await AddOrUpdateAppSettings(nameof(AppSettings.CustomClientId), CustomClientId);
-        },
-         DispatcherPriority.Background);
+            Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var mainVm = Defaults.Locator.GetRequiredService<MainViewModel>();
+                await mainVm.SwitchTenantCommand.ExecuteAsync(value);
+                AuthenticatedUserClaims = _authService.AuthenticatedUserClaims;
+            }, DispatcherPriority.Background);
+        }
     }
 
     partial void OnClearClipboardTimeoutChanging(int oldValue, int newValue)
@@ -154,20 +163,30 @@ public partial class SettingsPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task SignInOrRefreshTokenAsync()
+    private async Task RefreshCliStatus()
     {
-        var cancellation = new CancellationToken();
-        var account = await _authService.RefreshTokenAsync(cancellation);
+        var available = await _authService.CheckAzureCliAvailableAsync();
+        if (!available)
+            return;
 
-        if (account is null)
-            account = await _authService.LoginAsync(cancellation);
+        var initialized = await _authService.InitializeAsync();
+        if (!initialized)
+            return;
         AuthenticatedUserClaims = _authService.AuthenticatedUserClaims;
+
+        // Refresh tenant list
+        var tenants = await _authService.DiscoverTenantsAsync();
+        AvailableTenants = new ObservableCollection<TenantInfo>(tenants);
+        if (!string.IsNullOrEmpty(_authService.TenantId))
+        {
+            SelectedTenant = AvailableTenants.FirstOrDefault(t => t.TenantId == _authService.TenantId);
+        }
     }
 
     [RelayCommand]
     private async Task SignOut()
     {
-        await _authService.RemoveAccount();
+        _authService.ClearState();
         AuthenticatedUserClaims = _authService.AuthenticatedUserClaims;
     }
 
@@ -184,6 +203,5 @@ public partial class SettingsPageViewModel : ViewModelBase
         _ = _dbContext.DropTablesAndRecreate();
         return Task.CompletedTask;
     }
- 
 
 }

@@ -144,8 +144,10 @@ jobs:
       - name: Create Release
         run: |
           Get-ChildItem -Recurse
-          gh release create v1.0.${{github.run_number }} --draft
-          gh release upload v1.0.${{github.run_number }} "./keyvaultexplorer.win-x64/keyvaultexplorer.win-x64.tar" "./keyvaultexplorer.win-arm64/keyvaultexplorer.win-arm64.tar" "./keyvaultexplorer.osx-arm64/keyvaultexplorer.osx-arm64.tar" "./keyvaultexplorer.linux-x64/keyvaultexplorer.linux-x64.tar"
+          $runNum = "${{ github.run_number }}"
+          $tag = "v1.0.$runNum"
+          gh release create $tag --title $tag --notes "Azure CLI auth, multi-tenant support, RBAC/firewall fix buttons"
+          gh release upload $tag "./keyvaultexplorer.win-x64/keyvaultexplorer.win-x64.tar" "./keyvaultexplorer.win-arm64/keyvaultexplorer.win-arm64.tar" "./keyvaultexplorer.osx-arm64/keyvaultexplorer.osx-arm64.tar" "./keyvaultexplorer.linux-x64/keyvaultexplorer.linux-x64.tar"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh

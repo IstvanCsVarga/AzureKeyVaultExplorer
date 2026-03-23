@@ -48,6 +48,16 @@ public partial class VaultPageViewModel : ViewModelBase
     private bool hasAuthorizationError = false;
 
     [ObservableProperty]
+    private bool isRbacError = false;
+
+    [ObservableProperty]
+    private bool isNetworkError = false;
+
+    // Vault resource ID extracted from the 403 error for fix actions
+    private string _errorVaultResourceId;
+    private string _errorVaultName;
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VaultTotalString))]
     private bool isBusy = false;
 
@@ -78,44 +88,6 @@ public partial class VaultPageViewModel : ViewModelBase
         _clipboardService = Defaults.Locator.GetRequiredService<ClipboardService>();
         vaultContents = [];
         BitmapImage = new Lazy<Bitmap>(() => LoadImage("avares://KeyVaultExplorer/Assets/AppIcon.ico"));
-
-#if DEBUG
-        for (int i = 0; i < 5; i++)
-        {
-            var sp = (new SecretProperties($"{i}_Demo__Key_Token") { ContentType = "application/json", Enabled = true, ExpiresOn = new System.DateTime(), });
-            var item = new KeyVaultContentsAmalgamation
-            {
-                CreatedOn = new System.DateTime(),
-                UpdatedOn = new System.DateTime(),
-                Version = "version 1",
-                VaultUri = new Uri("https://stackoverflow.com/"),
-                ContentType = "application/json",
-                Id = new Uri("https://stackoverflow.com/"),
-                SecretProperties = sp
-            };
-
-            switch (i % 3)
-            {
-                case 0:
-                    item.Name = $"{i}_Secret";
-                    item.Type = KeyVaultItemType.Secret;
-                    break;
-
-                case 1:
-
-                    item.Name = $"{i}__Key";
-                    item.Type = KeyVaultItemType.Key;
-                    break;
-
-                case 2:
-                    item.Name = $"{i}_Certificate";
-                    item.Type = KeyVaultItemType.Key;
-                    break;
-            }
-            VaultContents.Add(item);
-        }
-        _vaultContents = VaultContents;
-#endif
     }
 
     public Bitmap LazyLoadedImage => BitmapImage.Value.CreateScaledBitmap(new Avalonia.PixelSize(24, 24), BitmapInterpolationMode.HighQuality);
@@ -176,18 +148,37 @@ public partial class VaultPageViewModel : ViewModelBase
                 }
             }
         }
-        catch (Exception ex) when (ex.Message.Contains("403"))
+        catch (Exception ex) when (ex.Message.Contains("403") || ex.Message.Contains("Forbidden"))
         {
-            //_notificationViewModel.AddMessage(new Avalonia.Controls.Notifications.Notification
-            //{
-            //    Message = string.Concat(ex.Message.AsSpan(0, 90), "..."),
-            //    Title = $"Insufficient Privileges on type '{item}'",
-            //    Type = NotificationType.Error,
-            //});
-            if (!item.HasFlag(KeyVaultItemType.All))
+            HasAuthorizationError = true;
+            var msg = ex.Message;
+
+            // Extract vault name from the error
+            var vaultNameMatch = System.Text.RegularExpressions.Regex.Match(msg, @"Vault:\s*([^;\r\n]+)");
+            _errorVaultName = vaultNameMatch.Success ? vaultNameMatch.Groups[1].Value.Trim() : null;
+
+            // Extract resource ID
+            var resourceMatch = System.Text.RegularExpressions.Regex.Match(msg, @"Resource:\s*'([^']+)'");
+            _errorVaultResourceId = resourceMatch.Success ? resourceMatch.Groups[1].Value.Trim() : null;
+
+            if (msg.Contains("ForbiddenByRbac") || msg.Contains("Assignment: (not found)"))
             {
-                HasAuthorizationError = true;
-                AuthorizationMessage = ex.Message;
+                IsRbacError = true;
+                IsNetworkError = false;
+                AuthorizationMessage = $"Access denied on {_errorVaultName ?? "this vault"}.\nYou don't have the required RBAC role assignment.";
+            }
+            else if (msg.Contains("ForbiddenByFirewall") || msg.Contains("PublicNetworkAccess") || msg.Contains("firewall"))
+            {
+                IsRbacError = false;
+                IsNetworkError = true;
+                AuthorizationMessage = $"Network access denied on {_errorVaultName ?? "this vault"}.\nYour IP is not whitelisted in the vault's firewall rules.";
+            }
+            else
+            {
+                // Unknown 403 -- show both options
+                IsRbacError = true;
+                IsNetworkError = true;
+                AuthorizationMessage = $"Access denied on {_errorVaultName ?? "this vault"}.\nThis could be a permission or network issue.";
             }
         }
         catch { }
@@ -285,7 +276,96 @@ public partial class VaultPageViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void CloseError() => HasAuthorizationError = false;
+    private void CloseError()
+    {
+        HasAuthorizationError = false;
+        IsRbacError = false;
+        IsNetworkError = false;
+    }
+
+    [RelayCommand]
+    private async Task GrantAccess()
+    {
+        if (string.IsNullOrEmpty(_errorVaultName))
+        {
+            _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification { Title = "Error", Message = "Could not determine vault name" });
+            return;
+        }
+
+        AuthorizationMessage = $"Granting access to {_errorVaultName}...";
+
+        // Get the vault resource via az CLI
+        var (exitCode, output) = await AuthService.RunAzCommandAsync($"ad signed-in-user show --query id -o tsv");
+        if (exitCode != 0)
+        {
+            AuthorizationMessage = "Could not determine your Azure AD user ID. Please sign in first.";
+            return;
+        }
+        var userObjectId = output.Trim();
+        var scope = _errorVaultResourceId ?? $"/subscriptions/*/resourceGroups/*/providers/Microsoft.KeyVault/vaults/{_errorVaultName}";
+
+        var results = new System.Text.StringBuilder();
+        var anySuccess = false;
+
+        // Key Vault Secrets User
+        var (rc1, out1) = await AuthService.RunAzCommandAsync($"role assignment create --assignee {userObjectId} --role \"Key Vault Secrets User\" --scope {scope} --output json");
+        if (rc1 == 0)
+        { results.AppendLine("Assigned: Key Vault Secrets User"); anySuccess = true; }
+        else
+        { results.AppendLine(out1.Contains("already exists") ? "Key Vault Secrets User: Already assigned" : "Key Vault Secrets User: Failed (insufficient permissions)"); if (out1.Contains("already exists")) anySuccess = true; }
+
+        // Key Vault Reader
+        var (rc2, out2) = await AuthService.RunAzCommandAsync($"role assignment create --assignee {userObjectId} --role \"Key Vault Reader\" --scope {scope} --output json");
+        if (rc2 == 0)
+        { results.AppendLine("Assigned: Key Vault Reader"); anySuccess = true; }
+        else
+        { results.AppendLine(out2.Contains("already exists") ? "Key Vault Reader: Already assigned" : "Key Vault Reader: Failed (insufficient permissions)"); if (out2.Contains("already exists")) anySuccess = true; }
+
+        if (anySuccess)
+            results.AppendLine("\nRBAC changes may take 5-10 minutes to propagate.");
+
+        AuthorizationMessage = results.ToString().Trim();
+        if (anySuccess)
+        {
+            IsRbacError = false;
+            _notificationViewModel.AddMessage(new Avalonia.Controls.Notifications.Notification { Title = "Access Granted", Message = $"Roles assigned on {_errorVaultName}. Retry in a few minutes.", Type = Avalonia.Controls.Notifications.NotificationType.Success });
+        }
+    }
+
+    [RelayCommand]
+    private async Task WhitelistIp()
+    {
+        if (string.IsNullOrEmpty(_errorVaultName))
+        {
+            _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification { Title = "Error", Message = "Could not determine vault name" });
+            return;
+        }
+
+        AuthorizationMessage = $"Adding your IP to {_errorVaultName} firewall...";
+
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(10) };
+            var ip = (await http.GetStringAsync("https://api.ipify.org")).Trim();
+
+            var (exitCode, output) = await AuthService.RunAzCommandAsync($"keyvault network-rule add --name {_errorVaultName} --ip-address {ip}/32 --output json");
+
+            if (exitCode == 0)
+            {
+                AuthorizationMessage = $"Added {ip} to {_errorVaultName} firewall. Retry loading the vault.";
+                IsNetworkError = false;
+                _notificationViewModel.AddMessage(new Avalonia.Controls.Notifications.Notification { Title = "IP Whitelisted", Message = $"{ip} added to {_errorVaultName}", Type = Avalonia.Controls.Notifications.NotificationType.Success });
+            }
+            else
+            {
+                AuthorizationMessage = $"Failed to add IP to firewall: {output}";
+            }
+        }
+        catch (System.Exception ex)
+        {
+            AuthorizationMessage = $"Error: {ex.Message}";
+        }
+    }
 
     [RelayCommand]
     private async Task Copy(KeyVaultContentsAmalgamation keyVaultItem)

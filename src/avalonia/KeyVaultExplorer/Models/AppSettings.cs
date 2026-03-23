@@ -14,8 +14,7 @@ public class AppSettings
     public string SplitViewDisplayMode { get; set; } = "Inline";
 
     public string PanePlacement { get; set; } = "Left";
-    public bool SettingsPageClientIdCheckbox { get; set; } = false;
-    public string CustomClientId { get; set; } = string.Empty;
+    public string SelectedTenantId { get; set; } = string.Empty;
 
 
 

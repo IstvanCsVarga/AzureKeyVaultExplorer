@@ -36,6 +36,11 @@ public partial class App : Application
                 KvExplorerDb.InitializeDatabase();
         }, DispatcherPriority.Loaded);
 
+        // Cleanup legacy MSAL cache file from previous versions
+        var legacyMsalCache = Path.Combine(Constants.LocalAppDataFolder, Constants.LegacyMsalCacheFileName);
+        if (File.Exists(legacyMsalCache))
+            File.Delete(legacyMsalCache);
+
         string settingsPath = Path.Combine(Constants.LocalAppDataFolder, "settings.json");
         if (!File.Exists(settingsPath))
         {

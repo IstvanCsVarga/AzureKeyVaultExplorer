@@ -338,28 +338,55 @@
 
 
                 </DockPanel>
-                <ScrollViewer
+                <Border
                     Grid.Row="4"
                     Grid.ColumnSpan="5"
+                    Margin="8"
+                    Padding="16"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource SystemFillColorCriticalBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
                     IsVisible="{Binding HasAuthorizationError}">
-                    <StackPanel Orientation="Vertical">
-                        <Button
-                            Margin="0,0,12,0"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Center"
-                            Command="{Binding CloseErrorCommand}"
-                            Content="&#xE8BB;"
-                            FontFamily="{StaticResource SymbolThemeFontFamily}"
-                            Foreground="Red"
-                            IsDefault="True"
-                            IsVisible="{Binding HasAuthorizationError}"
-                            ToolTip.Tip="Close Message" />
-                        <SelectableTextBlock
-                            xml:space="preserve"
+                    <StackPanel Orientation="Vertical" Spacing="12">
+                        <DockPanel>
+                            <ui:FontIcon
+                                DockPanel.Dock="Left"
+                                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                FontSize="20"
+                                Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                Glyph="&#xE7BA;" />
+                            <Button
+                                DockPanel.Dock="Right"
+                                HorizontalAlignment="Right"
+                                Command="{Binding CloseErrorCommand}"
+                                Content="&#xE8BB;"
+                                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                Theme="{StaticResource TransparentButton}"
+                                ToolTip.Tip="Dismiss" />
+                            <TextBlock
+                                Margin="8,0"
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Text="Access Denied" />
+                        </DockPanel>
+                        <TextBlock
                             Text="{Binding AuthorizationMessage}"
                             TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button
+                                Classes="accent"
+                                Command="{Binding GrantAccessCommand}"
+                                Content="Grant Myself Access"
+                                IsVisible="{Binding IsRbacError}" />
+                            <Button
+                                Classes="accent"
+                                Command="{Binding WhitelistIpCommand}"
+                                Content="Whitelist My IP"
+                                IsVisible="{Binding IsNetworkError}" />
+                        </StackPanel>
                     </StackPanel>
-                </ScrollViewer>
+                </Border>
             </Grid>
 
         </Panel>

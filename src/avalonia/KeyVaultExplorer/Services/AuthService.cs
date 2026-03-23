@@ -1,9 +1,11 @@
-﻿using KeyVaultExplorer.Models;
-using Microsoft.Identity.Client;
-using Microsoft.Identity.Client.Extensions.Msal;
+using Azure.Core;
+using Azure.Identity;
+using KeyVaultExplorer.Models;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,10 +13,6 @@ namespace KeyVaultExplorer.Services;
 
 public class AuthService
 {
-    public IPublicClientApplication authenticationClient;
-    public MsalCacheHelper msalCacheHelper;
-
-    // Providing the RedirectionUri to receive the token based on success or failure.
     public bool IsAuthenticated { get; private set; } = false;
 
     public AuthenticatedUserClaims AuthenticatedUserClaims { get; private set; }
@@ -23,156 +21,283 @@ public class AuthService
 
     public string TenantId { get; private set; }
 
-
-    public IAccount Account { get; private set; }
+    public TokenCredential Credential { get; private set; }
 
     public AuthService()
     {
-
-        var settings = Defaults.Locator.GetRequiredService<AppSettingReader>();
-        var customClientId = (string?)settings.AppSettings.CustomClientId ?? Constants.ClientId;
-        var settingsPageClientIdCheckbox = (bool?)settings.AppSettings.SettingsPageClientIdCheckbox ?? false;
-        string clientId = settingsPageClientIdCheckbox && !string.IsNullOrEmpty(customClientId) ? customClientId : Constants.ClientId;
-
-        authenticationClient = PublicClientApplicationBuilder.Create(clientId)
-            .WithRedirectUri($"msal{clientId}://auth")
-            .WithRedirectUri("http://localhost")
-            .WithIosKeychainSecurityGroup("us.cricketthomas.keyvaultexplorer")
-            .Build();
     }
 
-    // Propagates notification that the operation should be cancelled.
-    public async Task<AuthenticationResult> LoginAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Checks if the Azure CLI is installed and available on the PATH.
+    /// </summary>
+    public async Task<bool> CheckAzureCliAvailableAsync()
     {
-        await AttachTokenCache();
-        AuthenticationResult authenticationResult;
         try
         {
-            var options = new SystemWebViewOptions()
-            {
-                HtmlMessageError = "<p> An error occurred: {0}. Details {1}</p>",
-                BrowserRedirectSuccess = new Uri("https://www.microsoft.com")
-            };
-            //.WithPrompt(Prompt.ForceLogin) //This is optional. If provided, on each execution, the username and the password must be entered.
-            //#if MACCATALYST
-            //.WithUseEmbeddedWebView(false)
-            //.WithSystemWebViewOptions(options)
-            //#endif
-            authenticationResult = await authenticationClient.AcquireTokenInteractive(Constants.Scopes)
-                //.WithExtraScopesToConsent(Constants.AzureRMScope)
-                /*
-                 * Not including extra scopes allows personal accounts to sign in, however, this will be thrown.
-                 (Windows Azure Service Management API) is configured for use by Azure Active Directory users only.
-                    Please do not use the /consumers endpoint to serve this request. T
-
-                https://stackoverflow.com/questions/66470333/error-azure-key-vault-is-configured-for-use-by-azure-active-directory-users-on
-                 */
-
-                .ExecuteAsync(cancellationToken);
-
-            IsAuthenticated = true;
-            TenantName = authenticationResult.Account.Username.Split("@").TakeLast(1).Single();
-            TenantId = authenticationResult.TenantId;
-            AuthenticatedUserClaims = new AuthenticatedUserClaims()
-            {
-                Username = authenticationResult.Account.Username,
-                TenantId = authenticationResult.TenantId,
-                Name = authenticationResult.ClaimsPrincipal.Identities.First().FindFirst("name").Value,
-                Email = authenticationResult.ClaimsPrincipal.Identities.First().FindFirst("preferred_username").Value
-            };
-
-            // set the preferences/settings of the signed in account
-            //IAccount cachedUserAccount = Task.Run(async () => await PublicClientSingleton.Instance.MSALClientHelper.FetchSignedInUserFromCache()).Result;
-            //Preferences.Default.Set("auth_account_id", JsonSerializer.Serialize(result.UniqueId));
-            return authenticationResult;
+            var (exitCode, _) = await RunAzCommandAsync("--version");
+            return exitCode == 0;
         }
-        catch (MsalClientException ex)
+        catch
         {
-            Debug.WriteLine(ex);
-            return null;
+            return false;
         }
     }
 
     /// <summary>
-    /// returns the authenticated account with a refreshed token
+    /// Initializes auth state by reading the current az CLI account.
+    /// Creates an AzureCliCredential for the current or saved tenant.
     /// </summary>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public async Task<AuthenticationResult> RefreshTokenAsync(CancellationToken cancellationToken)
+    public async Task<bool> InitializeAsync()
     {
-        await AttachTokenCache();
-        AuthenticationResult authenticationResult;
-        var accounts = await authenticationClient.GetAccountsAsync();
-        if (!accounts.Any())
-            return null;
-
-        Account = accounts.First();
-        authenticationResult = await authenticationClient.AcquireTokenSilent(Constants.Scopes, accounts.FirstOrDefault()).WithForceRefresh(true).ExecuteAsync();
-        IsAuthenticated = true;
-        TenantName = Account.Username.Split("@").TakeLast(1).Single();
-        TenantId = authenticationResult.TenantId;
-        AuthenticatedUserClaims = new AuthenticatedUserClaims()
+        try
         {
-            Username = authenticationResult.Account.Username,
-            TenantId = authenticationResult.TenantId,
-            Name = authenticationResult.ClaimsPrincipal.Identities.First().FindFirst("name").Value,
-            Email = authenticationResult.ClaimsPrincipal.Identities.First().FindFirst("preferred_username").Value
-        };
+            var settings = Defaults.Locator.GetRequiredService<AppSettingReader>();
+            var savedTenantId = settings.AppSettings.SelectedTenantId;
 
-        return authenticationResult;
+            if (!string.IsNullOrEmpty(savedTenantId))
+            {
+                await SwitchTenantAsync(savedTenantId);
+                return IsAuthenticated;
+            }
+
+            var (exitCode, output) = await RunAzCommandAsync("account show --output json");
+            if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+                return false;
+
+            var accountInfo = JsonDocument.Parse(output);
+            var root = accountInfo.RootElement;
+
+            var tenantId = root.GetProperty("tenantId").GetString();
+            var userName = root.TryGetProperty("user", out var user)
+                ? user.GetProperty("name").GetString()
+                : "Unknown";
+            var tenantDisplayName = root.TryGetProperty("tenantDisplayName", out var tdn)
+                ? tdn.GetString()
+                : tenantId;
+
+            TenantId = tenantId;
+            TenantName = tenantDisplayName;
+            Credential = new AzureCliCredential(new AzureCliCredentialOptions
+            {
+                TenantId = tenantId
+            });
+
+            AuthenticatedUserClaims = new AuthenticatedUserClaims
+            {
+                Username = userName,
+                TenantId = tenantId,
+                Email = userName,
+                Name = userName,
+                TenantDisplayName = tenantDisplayName
+            };
+
+            IsAuthenticated = true;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"AuthService.InitializeAsync failed: {ex}");
+            return false;
+        }
     }
 
-    private async Task<System.Collections.Generic.IEnumerable<IAccount>> AttachTokenCache()
+    /// <summary>
+    /// Discovers all tenants the user has access to via az account list.
+    /// </summary>
+    public async Task<List<TenantInfo>> DiscoverTenantsAsync()
     {
-        // Cache configuration and hook-up to public application. Refer to https://github.com/AzureAD/microsoft-authentication-extensions-for-dotnet/wiki/Cross-platform-Token-Cache#configuring-the-token-cache
-        //var storageProperties = new StorageCreationPropertiesBuilder("netcore_maui_broker_cache.txt", "C:/temp")
+        try
+        {
+            var (exitCode, output) = await RunAzCommandAsync("account list --query \"[].{tenantId:tenantId, name:tenantDisplayName}\" --output json");
+            if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+                return [];
 
-        var storageProperties =
-             new StorageCreationPropertiesBuilder(Constants.CacheFileName, Constants.LocalAppDataFolder)
-               .WithLinuxKeyring(Constants.LinuxKeyRingSchema, Constants.LinuxKeyRingCollection, Constants.LinuxKeyRingLabel, Constants.LinuxKeyRingAttr1, Constants.LinuxKeyRingAttr2)
-               .WithMacKeyChain(Constants.KeyChainServiceName, Constants.KeyChainAccountName)
-               .Build();
+            var tenants = JsonSerializer.Deserialize<List<TenantDiscoveryEntry>>(output, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
 
-        msalCacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
-        msalCacheHelper.RegisterCache(authenticationClient.UserTokenCache);
+            if (tenants is null)
+                return [];
 
-        //msalCacheHelper.CacheChanged += (object sender, CacheChangedEventArgs args) =>
-        //{
-        //    Console.WriteLine($"Cache Changed, Added: {args.AccountsAdded.Count()} Removed: {args.AccountsRemoved.Count()}");
-        //};
-
-        // If the cache file is being reused, we'd find some already-signed-in accounts
-
-        return await authenticationClient.GetAccountsAsync().ConfigureAwait(false);
+            // Deduplicate by tenantId and build TenantInfo list
+            return tenants
+                .Where(t => !string.IsNullOrEmpty(t.TenantId))
+                .GroupBy(t => t.TenantId)
+                .Select(g => new TenantInfo(g.Key, g.First().Name ?? g.Key))
+                .OrderBy(t => t.DisplayName)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"AuthService.DiscoverTenantsAsync failed: {ex}");
+            return [];
+        }
     }
 
-    public async Task RemoveAccount()
+    /// <summary>
+    /// Switches to a different tenant by creating a new AzureCliCredential scoped to that tenant.
+    /// </summary>
+    public async Task SwitchTenantAsync(string tenantId)
     {
-        await AttachTokenCache();
-        var accounts = await authenticationClient.GetAccountsAsync();
-        Account = null;
+        TenantId = tenantId;
+        Credential = new AzureCliCredential(new AzureCliCredentialOptions
+        {
+            TenantId = tenantId
+        });
+
+        // Try to get account info for this tenant
+        try
+        {
+            var (exitCode, output) = await RunAzCommandAsync($"account show --tenant {tenantId} --output json");
+            if (exitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                var accountInfo = JsonDocument.Parse(output);
+                var root = accountInfo.RootElement;
+
+                var userName = root.TryGetProperty("user", out var user)
+                    ? user.GetProperty("name").GetString()
+                    : "Unknown";
+                var tenantDisplayName = root.TryGetProperty("tenantDisplayName", out var tdn)
+                    ? tdn.GetString()
+                    : tenantId;
+
+                TenantName = tenantDisplayName;
+                AuthenticatedUserClaims = new AuthenticatedUserClaims
+                {
+                    Username = userName,
+                    TenantId = tenantId,
+                    Email = userName,
+                    Name = userName,
+                    TenantDisplayName = tenantDisplayName
+                };
+                IsAuthenticated = true;
+            }
+            else
+            {
+                // Credential is set but we couldn't get account info -- user may need to az login
+                TenantName = tenantId;
+                AuthenticatedUserClaims = new AuthenticatedUserClaims
+                {
+                    Username = "Not logged in",
+                    TenantId = tenantId,
+                    Email = "Not logged in",
+                    Name = "Not logged in",
+                    TenantDisplayName = tenantId
+                };
+                IsAuthenticated = false;
+            }
+        }
+        catch
+        {
+            TenantName = tenantId;
+            IsAuthenticated = false;
+        }
+    }
+
+    /// <summary>
+    /// Launches az login interactively for the specified tenant.
+    /// Opens the browser for authentication (similar to kubelogin interactive).
+    /// </summary>
+    public async Task<bool> LaunchAzLoginAsync(string? tenantId = null)
+    {
+        try
+        {
+            var args = "login";
+            if (!string.IsNullOrEmpty(tenantId))
+                args += $" --tenant {tenantId}";
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = GetAzCliPath(),
+                Arguments = args,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = false
+            };
+
+            using var process = Process.Start(psi);
+            if (process is null)
+                return false;
+
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode == 0)
+            {
+                // Re-initialize after successful login
+                if (!string.IsNullOrEmpty(tenantId))
+                    await SwitchTenantAsync(tenantId);
+                else
+                    await InitializeAsync();
+                return true;
+            }
+
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"AuthService.LaunchAzLoginAsync failed: {ex}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Clears authentication state. Replaces the old RemoveAccount().
+    /// </summary>
+    public void ClearState()
+    {
         IsAuthenticated = false;
         AuthenticatedUserClaims = null;
-        await authenticationClient.RemoveAsync(accounts.FirstOrDefault());
+        TenantId = null;
+        TenantName = null;
+        Credential = null;
     }
 
-    public async Task<AuthenticationResult> GetAzureArmTokenSilent()
+    private static string GetAzCliPath()
     {
-        await AttachTokenCache();
-        var accounts = await authenticationClient.GetAccountsAsync();
-        if (!accounts.Any())
+        if (OperatingSystem.IsWindows())
+            return "az.cmd";
+
+        // On macOS/Linux, try common paths
+        var paths = new[] { "/usr/local/bin/az", "/opt/homebrew/bin/az", "az" };
+        foreach (var path in paths)
         {
-            await LoginAsync(CancellationToken.None);
-            accounts = await authenticationClient.GetAccountsAsync();
-            Account = accounts.First();
+            if (System.IO.File.Exists(path))
+                return path;
         }
-        return await authenticationClient.AcquireTokenSilent(Constants.AzureRMScope, accounts.First()).ExecuteAsync();
+        return "az"; // fallback to PATH
     }
 
-    public async Task<AuthenticationResult> GetAzureKeyVaultTokenSilent()
+    public static async Task<(int ExitCode, string Output)> RunAzCommandAsync(string arguments)
     {
-        await AttachTokenCache();
-        var accounts = await authenticationClient.GetAccountsAsync();
-        return await authenticationClient.AcquireTokenSilent(Constants.KvScope, accounts.First()).ExecuteAsync();
+        var psi = new ProcessStartInfo
+        {
+            FileName = GetAzCliPath(),
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process is null)
+            return (-1, string.Empty);
+
+        // Read both stdout and stderr concurrently to avoid deadlocks
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await Task.WhenAll(outputTask, errorTask);
+        await process.WaitForExitAsync();
+
+        return (process.ExitCode, outputTask.Result);
+    }
+
+    private class TenantDiscoveryEntry
+    {
+        public string TenantId { get; set; }
+        public string Name { get; set; }
     }
 }

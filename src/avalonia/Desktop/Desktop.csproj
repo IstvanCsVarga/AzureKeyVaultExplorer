@@ -39,6 +39,7 @@
     <TrimmerRootAssembly Include="Azure.Security.KeyVault.Certificates" />
     <TrimmerRootAssembly Include="Azure.Security.KeyVault.Keys" />
     <TrimmerRootAssembly Include="Azure.Security.KeyVault.Secrets" />
+	<TrimmerRootAssembly Include="Azure.Identity" />
 </ItemGroup>
 	
 

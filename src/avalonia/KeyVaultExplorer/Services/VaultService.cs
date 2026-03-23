@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.KeyVault;
 using Azure.ResourceManager.Resources;
@@ -44,21 +44,19 @@ public partial class VaultService
 
     public async Task<KeyVaultKey> CreateKey(KeyVaultKey key, Uri KeyVaultUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new KeyClient(KeyVaultUri, token);
+        var client = new KeyClient(KeyVaultUri, _authService.Credential);
         return await client.CreateKeyAsync(key.Name, key.KeyType);
     }
 
     public async Task<KeyVaultSecret> CreateSecret(KeyVaultSecret secret, Uri KeyVaultUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new SecretClient(KeyVaultUri, token);
+        var client = new SecretClient(KeyVaultUri, _authService.Credential);
         return await client.SetSecretAsync(secret);
     }
 
     public async IAsyncEnumerable<SubscriptionResourceWithNextPageToken> GetAllSubscriptions(CancellationToken cancellationToken = default, string continuationToken = null)
     {
-        var armClient = new ArmClient(new CustomTokenCredential(await _authService.GetAzureArmTokenSilent()));
+        var armClient = new ArmClient(_authService.Credential);
         var subscriptionsPageable = armClient.GetSubscriptions().GetAllAsync(cancellationToken).AsPages(continuationToken);
 
         await foreach (var subscription in subscriptionsPageable)
@@ -72,8 +70,7 @@ public partial class VaultService
 
     public async Task<KeyVaultCertificateWithPolicy> GetCertificate(Uri kvUri, string name)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new CertificateClient(kvUri, token);
+        var client = new CertificateClient(kvUri, _authService.Credential);
         try
         {
             var response = await client.GetCertificateAsync(name);
@@ -87,8 +84,7 @@ public partial class VaultService
 
     public async Task<List<CertificateProperties>> GetCertificateProperties(Uri kvUri, string name)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new CertificateClient(kvUri, token);
+        var client = new CertificateClient(kvUri, _authService.Credential);
         List<CertificateProperties> list = new();
         try
         {
@@ -107,8 +103,7 @@ public partial class VaultService
 
     public async Task<KeyVaultKey> GetKey(Uri kvUri, string name)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new KeyClient(kvUri, token);
+        var client = new KeyClient(kvUri, _authService.Credential);
         try
         {
             var response = await client.GetKeyAsync(name);
@@ -122,8 +117,7 @@ public partial class VaultService
 
     public async Task<List<KeyProperties>> GetKeyProperties(Uri kvUri, string name)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new KeyClient(kvUri, token);
+        var client = new KeyClient(kvUri, _authService.Credential);
         List<KeyProperties> list = new();
         try
         {
@@ -142,8 +136,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<KeyVaultResource> GetKeyVaultResource()
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureArmTokenSilent());
-        var armClient = new ArmClient(token);
+        var armClient = new ArmClient(_authService.Credential);
 
         var subscription = await armClient.GetDefaultSubscriptionAsync();
         await foreach (var kvResource in subscription.GetKeyVaultsAsync())
@@ -152,11 +145,10 @@ public partial class VaultService
         }
     }
 
-  
+
     public async Task<KeyVaultResource> GetKeyVaultResource(string subscriptionId, string resourceGroupName, string vaultName)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureArmTokenSilent());
-        var client = new ArmClient(token);
+        var client = new ArmClient(_authService.Credential);
         var resourceIdentifier = KeyVaultResource.CreateResourceIdentifier(subscriptionId: subscriptionId, resourceGroupName: resourceGroupName, vaultName: vaultName);
         return await client.GetKeyVaultResource(resourceIdentifier).GetAsync();
     }
@@ -168,8 +160,7 @@ public partial class VaultService
     /// <returns></returns>
     public async IAsyncEnumerable<KvSubscriptionModel> GetKeyVaultResourceBySubscription()
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureArmTokenSilent());
-        var armClient = new ArmClient(token);
+        var armClient = new ArmClient(_authService.Credential);
 
         var placeholder = new KeyVaultResourcePlaceholder();
         var rgPlaceholder = new KvResourceGroupModel() //needed to show chevron
@@ -211,8 +202,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<KeyVaultResource> GetKeyVaultResources()
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureArmTokenSilent());
-        var armClient = new ArmClient(token);
+        var armClient = new ArmClient(_authService.Credential);
         foreach (var subscription in armClient.GetSubscriptions().ToArray())
         {
             await foreach (var kvResource in subscription.GetKeyVaultsAsync())
@@ -224,7 +214,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<KeyVaultResource> GetKeyVaultsByResourceGroup(ResourceGroupResource resource)
     {
-        var armClient = new ArmClient(new CustomTokenCredential(await _authService.GetAzureArmTokenSilent()));
+        var armClient = new ArmClient(_authService.Credential);
 
         await foreach (var kvResource in resource.GetKeyVaults())
         {
@@ -234,7 +224,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<KeyVaultResource> GetKeyVaultsBySubscription(KvSubscriptionModel resource)
     {
-        var armClient = new ArmClient(new CustomTokenCredential(await _authService.GetAzureArmTokenSilent()));
+        var armClient = new ArmClient(_authService.Credential);
         resource.Subscription = armClient.GetSubscriptionResource(resource.Subscription.Id);
 
         foreach (var kvResource in resource.Subscription.GetKeyVaults())
@@ -245,7 +235,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<ResourceGroupResource> GetResourceGroupBySubscription(KvSubscriptionModel resource)
     {
-        var armClient = new ArmClient(new CustomTokenCredential(await _authService.GetAzureArmTokenSilent()));
+        var armClient = new ArmClient(_authService.Credential);
         resource.Subscription = armClient.GetSubscriptionResource(resource.Subscription.Id);
 
         foreach (var kvResourceGroup in resource.Subscription.GetResourceGroups())
@@ -256,8 +246,7 @@ public partial class VaultService
 
     public async Task<KeyVaultSecret> GetSecret(Uri kvUri, string secretName)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new SecretClient(kvUri, token);
+        var client = new SecretClient(kvUri, _authService.Credential);
         try
         {
             var secret = await client.GetSecretAsync(secretName, cancellationToken: CancellationToken.None);
@@ -275,8 +264,7 @@ public partial class VaultService
 
     public async Task<List<SecretProperties>> GetSecretProperties(Uri keyVaultUri, string name)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new SecretClient(keyVaultUri, token);
+        var client = new SecretClient(keyVaultUri, _authService.Credential);
         List<SecretProperties> list = new();
         try
         {
@@ -296,7 +284,7 @@ public partial class VaultService
     public async Task<Dictionary<string, KeyVaultResource>> GetStoredSelectedSubscriptions(string subscriptionId)
     {
         var resource = new ResourceIdentifier(subscriptionId);
-        var armClient = new ArmClient(new CustomTokenCredential(await _authService.GetAzureArmTokenSilent()));
+        var armClient = new ArmClient(_authService.Credential);
         SubscriptionResource subscription = armClient.GetSubscriptionResource(resource);
 
         var vaults = subscription.GetKeyVaultsAsync();
@@ -313,8 +301,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<CertificateProperties> GetVaultAssociatedCertificates(Uri kvUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new CertificateClient(kvUri, token);
+        var client = new CertificateClient(kvUri, _authService.Credential);
         await foreach (var certProperties in client.GetPropertiesOfCertificatesAsync())
         {
             yield return certProperties;
@@ -323,8 +310,7 @@ public partial class VaultService
 
     public async IAsyncEnumerable<KeyProperties> GetVaultAssociatedKeys(Uri kvUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new KeyClient(kvUri, token);
+        var client = new KeyClient(kvUri, _authService.Credential);
         await foreach (var keyProperties in client.GetPropertiesOfKeysAsync())
         {
             yield return keyProperties;
@@ -335,8 +321,7 @@ public partial class VaultService
     {
         if (kvUri is not null)
         {
-            var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-            var client = new SecretClient(kvUri, token);
+            var client = new SecretClient(kvUri, _authService.Credential);
             await foreach (var secretProperties in client.GetPropertiesOfSecretsAsync())
             {
                 yield return secretProperties;
@@ -346,15 +331,113 @@ public partial class VaultService
 
     public async Task<KeyVaultKey> UpdateKey(KeyProperties properties, Uri KeyVaultUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new KeyClient(KeyVaultUri, token);
+        var client = new KeyClient(KeyVaultUri, _authService.Credential);
         return await client.UpdateKeyPropertiesAsync(properties);
     }
 
     public async Task<SecretProperties> UpdateSecret(SecretProperties properties, Uri KeyVaultUri)
     {
-        var token = new CustomTokenCredential(await _authService.GetAzureKeyVaultTokenSilent());
-        var client = new SecretClient(KeyVaultUri, token);
+        var client = new SecretClient(KeyVaultUri, _authService.Credential);
         return await client.UpdateSecretPropertiesAsync(properties);
+    }
+
+    /// <summary>
+    /// Gets the user's current public IP address.
+    /// </summary>
+    public static async Task<string> GetPublicIpAsync()
+    {
+        using var http = new System.Net.Http.HttpClient();
+        http.Timeout = TimeSpan.FromSeconds(10);
+        var ip = await http.GetStringAsync("https://api.ipify.org");
+        return ip.Trim();
+    }
+
+    /// <summary>
+    /// Adds the user's current public IP to the Key Vault firewall rules.
+    /// </summary>
+    public async Task<(bool Success, string Message)> WhitelistMyIpOnVault(KeyVaultResource vault)
+    {
+        try
+        {
+            var ip = await GetPublicIpAsync();
+            var vaultName = vault.Data.Name;
+
+            // Use az CLI to add the IP rule
+            var (exitCode, output) = await AuthService.RunAzCommandAsync(
+                $"keyvault network-rule add --name {vaultName} --ip-address {ip}/32 --output json");
+
+            if (exitCode == 0)
+                return (true, $"Added {ip} to {vaultName} firewall rules");
+
+            // Check stderr for details
+            var (_, errorOutput) = await AuthService.RunAzCommandAsync(
+                $"keyvault network-rule add --name {vaultName} --ip-address {ip}/32 --output json 2>&1");
+            return (false, $"Failed to add IP to firewall: {(string.IsNullOrEmpty(errorOutput) ? output : errorOutput)}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Grants the current user "Key Vault Secrets User" + "Key Vault Reader" roles on the vault.
+    /// </summary>
+    public async Task<(bool Success, string Message)> GrantMyselfAccessToVault(KeyVaultResource vault)
+    {
+        try
+        {
+            var vaultResourceId = vault.Data.Id.ToString();
+            var userEmail = _authService.AuthenticatedUserClaims?.Email;
+            if (string.IsNullOrEmpty(userEmail))
+                return (false, "Not authenticated. Please sign in first.");
+
+            // Get the user's object ID
+            var (exitCode, output) = await AuthService.RunAzCommandAsync(
+                $"ad signed-in-user show --query id -o tsv");
+            if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
+                return (false, "Could not determine your Azure AD user ID");
+
+            var userObjectId = output.Trim();
+            var results = new System.Text.StringBuilder();
+            var anySuccess = false;
+
+            // Assign Key Vault Secrets User role
+            var (exitCode1, output1) = await AuthService.RunAzCommandAsync(
+                $"role assignment create --assignee {userObjectId} --role \"Key Vault Secrets User\" --scope {vaultResourceId} --output json");
+            if (exitCode1 == 0)
+            {
+                results.AppendLine("Assigned: Key Vault Secrets User");
+                anySuccess = true;
+            }
+            else
+            {
+                results.AppendLine($"Key Vault Secrets User: {(output1.Contains("already exists") ? "Already assigned" : "Failed - insufficient permissions")}");
+                if (output1.Contains("already exists")) anySuccess = true;
+            }
+
+            // Assign Key Vault Reader role
+            var (exitCode2, output2) = await AuthService.RunAzCommandAsync(
+                $"role assignment create --assignee {userObjectId} --role \"Key Vault Reader\" --scope {vaultResourceId} --output json");
+            if (exitCode2 == 0)
+            {
+                results.AppendLine("Assigned: Key Vault Reader");
+                anySuccess = true;
+            }
+            else
+            {
+                results.AppendLine($"Key Vault Reader: {(output2.Contains("already exists") ? "Already assigned" : "Failed - insufficient permissions")}");
+                if (output2.Contains("already exists")) anySuccess = true;
+            }
+
+            if (anySuccess)
+                results.AppendLine("Note: RBAC changes may take 5-10 minutes to propagate");
+
+            return (anySuccess, results.ToString().Trim());
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Error: {ex.Message}");
+        }
     }
 }

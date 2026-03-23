@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:sys="clr-namespace:System;assembly=netstandard"
+    xmlns:mdl="using:KeyVaultExplorer.Models"
     xmlns:ui="using:FluentAvalonia.UI.Controls"
     xmlns:vm="using:KeyVaultExplorer.ViewModels"
     Margin="0,40,0,0"
@@ -47,9 +48,24 @@
                         </ui:SettingsExpanderItem.Content>
                     </ui:SettingsExpanderItem>
 
-                    <ui:SettingsExpanderItem Content="Sign In" Description="Sign into to Key Vault Explorer for Azure with Microsoft Account">
+                    <ui:SettingsExpanderItem Content="Active Tenant" Description="Select the Azure AD tenant to work with">
                         <ui:SettingsExpanderItem.Footer>
-                            <Button Click="SignInButton_Click" Command="{Binding SignInOrRefreshTokenCommand}">Sign In</Button>
+                            <ComboBox
+                                MinWidth="350"
+                                ItemsSource="{Binding AvailableTenants}"
+                                SelectedItem="{Binding SelectedTenant, Mode=TwoWay}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="mdl:TenantInfo">
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </ui:SettingsExpanderItem.Footer>
+                    </ui:SettingsExpanderItem>
+
+                    <ui:SettingsExpanderItem Content="Refresh CLI Status" Description="Check Azure CLI login status and refresh account info">
+                        <ui:SettingsExpanderItem.Footer>
+                            <Button Click="SignInButton_Click" Command="{Binding RefreshCliStatusCommand}">Refresh CLI Status</Button>
                         </ui:SettingsExpanderItem.Footer>
                     </ui:SettingsExpanderItem>
 
@@ -60,33 +76,12 @@
                                 Content="Delete Database" />
                         </ui:SettingsExpanderItem.Footer>
                     </ui:SettingsExpanderItem>
-                    <ui:SettingsExpanderItem Content="Sign out" Description="Remove the current account from cache">
+                    <ui:SettingsExpanderItem Content="Sign out" Description="Clear current session state">
                         <ui:SettingsExpanderItem.Footer>
                             <Button
                                 Click="SignOutButton_Click"
                                 Command="{Binding SignOutCommand}"
                                 Content="Sign out" />
-                        </ui:SettingsExpanderItem.Footer>
-                    </ui:SettingsExpanderItem>
-
-                    <ui:SettingsExpanderItem Description="Use a custom Client ID / Application ID for Azure MSAL authentication">
-                        <ui:SettingsExpanderItem.Content>
-                            <StackPanel Orientation="Horizontal">
-                                <CheckBox Name="SettingsPageClientIdCheckbox" IsChecked="{Binding SettingsPageClientIdCheckbox, Mode=TwoWay}" />
-                                <TextBlock Margin="0,6,0,0">Override Client Id (requires restart)</TextBlock>
-                            </StackPanel>
-                        </ui:SettingsExpanderItem.Content>
-
-                        <ui:SettingsExpanderItem.Footer>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBox
-                                    Name="SettingsPageClientIdTextBox"
-                                    MinWidth="325"
-                                    Classes.clearButton="True"
-                                    IsEnabled="{Binding #SettingsPageClientIdCheckbox.IsChecked}"
-                                    Text="{Binding CustomClientId, Mode=TwoWay}"
-                                    Watermark="Azure Client Id: e.g. 18405e16-1ba4aca2.." />
-                            </StackPanel>
                         </ui:SettingsExpanderItem.Footer>
                     </ui:SettingsExpanderItem>
 

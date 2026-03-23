@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using KeyVaultExplorer.Services;
 using System.Threading;
@@ -26,15 +26,14 @@ public partial class TitleBarViewModel : ViewModelBase
     [RelayCommand]
     private async void SignIn()
     {
-        var cancellation = new CancellationToken();
-        var account = await _authService.RefreshTokenAsync(cancellation);
-        if (account == null)
-            await _authService.LoginAsync(cancellation);
+        var initialized = await _authService.InitializeAsync();
+        if (!initialized)
+            await _authService.LaunchAzLoginAsync();
     }
 
     [RelayCommand]
     private async Task SignOut()
     {
-        await _authService.RemoveAccount();
+        _authService.ClearState();
     }
 }

@@ -61,6 +61,13 @@
                 FontSize="{StaticResource FontSizeSmall}"
                 Text="{Binding AuthenticatedUserClaims.Email}"
                 Theme="{StaticResource CaptionTextBlockStyle}" />
+            <TextBlock
+                Margin="8,0,0,0"
+                Background="{x:Null}"
+                FontSize="10"
+                Opacity="0.7"
+                Text="{Binding AuthenticatedUserClaims.TenantDisplayName}"
+                Theme="{StaticResource CaptionTextBlockStyle}" />
         </StackPanel>
     </StackPanel>
 

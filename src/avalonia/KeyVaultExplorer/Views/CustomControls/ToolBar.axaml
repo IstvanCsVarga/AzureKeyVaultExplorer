@@ -7,6 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="clr-namespace:KeyVaultExplorer.Models;assembly=KeyVaultExplorer"
     xmlns:ui="using:FluentAvalonia.UI.Controls"
+    xmlns:mdl="using:KeyVaultExplorer.Models"
     xmlns:vm="using:KeyVaultExplorer.ViewModels"
     d:DesignHeight="150"
     d:DesignWidth="925"
@@ -60,16 +61,40 @@
         </Button>
 
 
-        <Button
-            Name="SettingsPage"
-            HorizontalAlignment="Right"
-            Click="SettingsButton_Click"
-            Content="&#xE115;"
-            FontFamily="{StaticResource SymbolThemeFontFamily}"
-            FontSize="15"
-            Theme="{StaticResource TransparentButton}"
-            ToolTip.Tip="Application Settings"
-            ToolTip.VerticalOffset="10" />
+        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4">
+            <ui:FontIcon
+                Margin="0,0,0,0"
+                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                FontSize="14"
+                Glyph="&#xE168;"
+                ToolTip.Tip="Active Tenant" />
+            <ComboBox
+                Name="TenantSelector"
+                MinWidth="220"
+                MaxWidth="350"
+                Height="25"
+                VerticalAlignment="Center"
+                FontSize="12"
+                x:DataType="vm:MainViewModel"
+                ItemsSource="{Binding AvailableTenants}"
+                SelectedItem="{Binding SelectedTenant, Mode=TwoWay}"
+                ToolTip.Tip="Switch Azure AD Tenant">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="mdl:TenantInfo">
+                        <TextBlock Text="{Binding DisplayName}" FontSize="12" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Button
+                Name="SettingsPage"
+                Click="SettingsButton_Click"
+                Content="&#xE115;"
+                FontFamily="{StaticResource SymbolThemeFontFamily}"
+                FontSize="15"
+                Theme="{StaticResource TransparentButton}"
+                ToolTip.Tip="Application Settings"
+                ToolTip.VerticalOffset="10" />
+        </StackPanel>
     </DockPanel>
 
 </UserControl>

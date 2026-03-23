@@ -104,8 +104,7 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
                     _treeViewList.Insert(0, quickAccess);
 
                     var savedItems = _dbContext.GetQuickAccessItemsAsyncEnumerable(_authService.TenantId ?? null);
-                    var token = new CustomTokenCredential(await _authService.GetAzureArmTokenSilent());
-                    var armClient = new ArmClient(token);
+                    var armClient = new ArmClient(_authService.Credential);
                     await foreach (var item in savedItems)
                     {
                         var kvr = armClient.GetKeyVaultResource(new ResourceIdentifier(item.KeyVaultId));
@@ -335,6 +334,42 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
         if (model is null) return;
         var uri = $"https://portal.azure.com/#@{_authService.TenantName}/resource{model.Id}";
         await _clipboardService.SetTextAsync(uri);
+    }
+
+    [RelayCommand]
+    private async Task GrantMyselfAccess(KeyVaultResource model)
+    {
+        if (model is null) return;
+        _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification
+        {
+            Title = "Granting Access",
+            Message = $"Assigning Key Vault roles on {model.Data.Name}..."
+        });
+        var (success, message) = await _vaultService.GrantMyselfAccessToVault(model);
+        Dispatcher.UIThread.Post(() =>
+            _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification
+            {
+                Title = success ? "Access Granted" : "Access Grant Failed",
+                Message = message
+            }), DispatcherPriority.Background);
+    }
+
+    [RelayCommand]
+    private async Task WhitelistMyIp(KeyVaultResource model)
+    {
+        if (model is null) return;
+        _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification
+        {
+            Title = "Whitelisting IP",
+            Message = $"Adding your IP to {model.Data.Name} firewall..."
+        });
+        var (success, message) = await _vaultService.WhitelistMyIpOnVault(model);
+        Dispatcher.UIThread.Post(() =>
+            _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification
+            {
+                Title = success ? "IP Whitelisted" : "IP Whitelist Failed",
+                Message = message
+            }), DispatcherPriority.Background);
     }
 
     private void TreeViewList_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)

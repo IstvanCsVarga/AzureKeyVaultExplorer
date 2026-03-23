@@ -34,7 +34,7 @@ public partial class SettingsPage : UserControl
 
     private void FetchUserInfoSettingsExpanderItem_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        (DataContext as SettingsPageViewModel)!.SignInOrRefreshTokenCommand.ExecuteAsync(null);
+        (DataContext as SettingsPageViewModel)!.RefreshCliStatusCommand.ExecuteAsync(null);
     }
 
     private void OnNavigatedTo(object sender, NavigationEventArgs e)
@@ -44,8 +44,7 @@ public partial class SettingsPage : UserControl
             IsInitialLoad = false;
             Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                await (DataContext as SettingsPageViewModel)!.SignInOrRefreshTokenCommand.ExecuteAsync(null);
-                //((Control)sender)!.RaiseEvent(new RoutedEventArgs(MainView.SignInRoutedEvent));
+                await (DataContext as SettingsPageViewModel)!.RefreshCliStatusCommand.ExecuteAsync(null);
             }, DispatcherPriority.Background);
         }
     }

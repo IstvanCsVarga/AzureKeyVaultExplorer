@@ -48,6 +48,17 @@
                 CommandParameter="{Binding #SubscriptionTreeViewList.SelectedItem}"
                 IconSource="Copy"
                 Text="Copy Portal URL" />
+            <ui:MenuFlyoutSeparator />
+            <ui:MenuFlyoutItem
+                Command="{Binding GrantMyselfAccessCommand}"
+                CommandParameter="{Binding #SubscriptionTreeViewList.SelectedItem}"
+                IconSource="Permissions"
+                Text="Grant Myself Access" />
+            <ui:MenuFlyoutItem
+                Command="{Binding WhitelistMyIpCommand}"
+                CommandParameter="{Binding #SubscriptionTreeViewList.SelectedItem}"
+                IconSource="Globe"
+                Text="Whitelist My IP" />
 
         </ui:FAMenuFlyout>
     </UserControl.Resources>

@@ -46,14 +46,17 @@ public partial class KeyVaultTreeList : UserControl
         var flyout = Resources["FAMenuFlyoutSubscriptionTreeView"] as FAMenuFlyout;
 
         // if pinned, enable unpinned item
-        foreach (MenuFlyoutItem item in flyout.Items)
+        foreach (var flyoutItem in flyout.Items)
         {
-            _ = item.Name switch
+            if (flyoutItem is MenuFlyoutItem item)
             {
-                "PinToQuickAccess" => item.IsVisible = !isCurrentlyPinned,
-                "UnpinFromQuickAccess" => item.IsVisible = isCurrentlyPinned,
-                _ => item.IsVisible = true
-            };
+                _ = item.Name switch
+                {
+                    "PinToQuickAccess" => item.IsVisible = !isCurrentlyPinned,
+                    "UnpinFromQuickAccess" => item.IsVisible = isCurrentlyPinned,
+                    _ => item.IsVisible = true
+                };
+            }
         }
         //var unpinnedItem = (MenuFlyoutItem)flyout.Items.ElementAt(1);
         //unpinnedItem.

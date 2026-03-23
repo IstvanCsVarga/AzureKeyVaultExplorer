@@ -54,9 +54,11 @@
             <NativeMenuItem Header="Account">
                 <NativeMenuItem.Menu>
                     <NativeMenu>
-                        <NativeMenuItem Command="{Binding ForceSignInCommand}" Header="Login" />
-                        <NativeMenuItem Command="{Binding SignOutCommand}" Header="Logout" />
+                        <NativeMenuItem Command="{Binding ForceSignInCommand}" Header="Azure CLI Login" />
+                        <NativeMenuItem Command="{Binding SignOutCommand}" Header="Sign Out" />
+                        <NativeMenuItemSeparator />
                         <NativeMenuItem Header="{Binding AuthenticatedUserClaims.Email}" IsEnabled="False" />
+                        <NativeMenuItem Header="{Binding AuthenticatedUserClaims.TenantDisplayName}" IsEnabled="False" />
                     </NativeMenu>
                 </NativeMenuItem.Menu>
             </NativeMenuItem>
