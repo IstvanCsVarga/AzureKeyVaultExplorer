@@ -21,24 +21,23 @@ jobs:
     - uses: actions/cache@v3
       with:
           path: ~/.nuget/win-packages
-          # Look to see if there is a cache hit for the corresponding requirements file
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             win-nuget
     - name: Publish Windows
-      run: | 
+      run: |
         ./src/avalonia/build.ps1 -Runtime win-x64 -PublishAot -BuildNumber '1.0.${{github.run_number }}'
-        New-Item -ItemType Directory -Path "win-x64" 
-        Move-Item -Path ".\src\publish" -Destination "$env:GITHUB_WORKSPACE\win-x64\publish"
-        gci -path  "$env:GITHUB_WORKSPACE\win-x64\publish"
       shell: pwsh
     - name: Create Package
-      run: tar -cvf keyvaultexplorer.win-x64.tar win-x64
+      run: |
+        Compress-Archive -Path ".\src\publish\*" -DestinationPath "KeyVaultExplorer-win-x64.zip"
+      shell: pwsh
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: keyvaultexplorer.win-x64
-        path: keyvaultexplorer.win-x64.tar    
+        name: KeyVaultExplorer-win-x64
+        path: KeyVaultExplorer-win-x64.zip
+
   build_windows_arm:
     name: Build Windows ARM
     runs-on: windows-latest
@@ -51,24 +50,23 @@ jobs:
     - uses: actions/cache@v3
       with:
           path: ~/.nuget/win-packages
-          # Look to see if there is a cache hit for the corresponding requirements file
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             winarm-nuget
-    - name: Publish Windows
-      run: | 
+    - name: Publish Windows ARM
+      run: |
         ./src/avalonia/build.ps1 -Runtime win-arm64 -PublishAot -BuildNumber '1.0.${{github.run_number }}'
-        New-Item -ItemType Directory -Path "win-arm64" 
-        Move-Item -Path ".\src\publish" -Destination "$env:GITHUB_WORKSPACE\win-arm64\publish"
-        gci -path  "$env:GITHUB_WORKSPACE\win-arm64\publish"
       shell: pwsh
     - name: Create Package
-      run: tar -cvf keyvaultexplorer.win-arm64.tar win-arm64
+      run: |
+        Compress-Archive -Path ".\src\publish\*" -DestinationPath "KeyVaultExplorer-win-arm64.zip"
+      shell: pwsh
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: keyvaultexplorer.win-arm64
-        path: keyvaultexplorer.win-arm64.tar    
+        name: KeyVaultExplorer-win-arm64
+        path: KeyVaultExplorer-win-arm64.zip
+
   build_macos:
     name: Build macOS Arm64
     runs-on: macos-latest
@@ -81,25 +79,39 @@ jobs:
     - uses: actions/cache@v3
       with:
           path: ~/.nuget/macos-arm-packages
-          # Look to see if there is a cache hit for the corresponding requirements file
           key: ${{ runner.os }}-armnuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
-            #mac-arm-nuget
+            mac-arm-nuget
     - name: Publish macOS Arm
-      run: | 
-        ./src/avalonia/build.ps1 -Runtime osx-arm64 -PublishAot:$false -BuildNumber '1.0.${{github.run_number }}'      
-        New-Item -ItemType Directory -Path "osx-arm64" 
-        Move-Item -Path ".\src\publish" -Destination "$env:GITHUB_WORKSPACE\osx-arm64\publish"
-        Rename-Item -Path "$env:GITHUB_WORKSPACE\osx-arm64\publish\keyvaultexplorerdesktop" -NewName "Key Vault Explorer for Azure" -Force 
-
+      run: |
+        ./src/avalonia/build.ps1 -Runtime osx-arm64 -PublishAot:$false -BuildNumber '1.0.${{github.run_number }}'
       shell: pwsh
-    - name: Create Package
-      run: tar -cvf keyvaultexplorer.osx-arm64.tar osx-arm64/
+    - name: Create macOS App Bundle
+      run: |
+        APP_NAME="Key Vault Explorer.app"
+        mkdir -p "${APP_NAME}/Contents/MacOS"
+        mkdir -p "${APP_NAME}/Contents/Resources"
+
+        # Copy binary and libs into bundle
+        cp -R src/publish/* "${APP_NAME}/Contents/MacOS/"
+        rm -f "${APP_NAME}/Contents/MacOS/"*.pdb "${APP_NAME}/Contents/MacOS/"*.dsym
+
+        # Copy Info.plist and icon
+        cp src/avalonia/KeyVaultExplorer/Assets/Info.plist "${APP_NAME}/Contents/"
+        cp src/avalonia/KeyVaultExplorer/Assets/AppIcon.icns "${APP_NAME}/Contents/Resources/"
+
+        # Make executable
+        chmod +x "${APP_NAME}/Contents/MacOS/keyvaultexplorerdesktop"
+
+        # Create zip with the .app bundle
+        ditto -c -k --sequesterRsrc --keepParent "${APP_NAME}" "KeyVaultExplorer-macOS-arm64.zip"
+      shell: bash
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: keyvaultexplorer.osx-arm64
-        path: keyvaultexplorer.osx-arm64.tar    
+        name: KeyVaultExplorer-macOS-arm64
+        path: KeyVaultExplorer-macOS-arm64.zip
+
   build_linux:
     name: Build Linux
     runs-on: ubuntu-24.04
@@ -112,46 +124,54 @@ jobs:
     - uses: actions/cache@v3
       with:
           path: ~/.nuget/linux-packages
-          # Look to see if there is a cache hit for the corresponding requirements file
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             linux-nuget
     - name: Publish Linux
-      run: | 
+      run: |
         ./src/avalonia/build.ps1 -Runtime linux-x64 -PublishAot:$false -BuildNumber '1.0.${{github.run_number }}'
-        New-Item -ItemType Directory -Path "linux-x64" 
-        Move-Item -Path ".\src\publish" -Destination "$env:GITHUB_WORKSPACE\linux-x64\publish"
-        gci -path  "$env:GITHUB_WORKSPACE\linux-x64\publish"
       shell: pwsh
     - name: Create Package
-      run: tar -cvf keyvaultexplorer.linux-x64.tar linux-x64
+      run: tar -czf KeyVaultExplorer-linux-x64.tar.gz -C src/publish .
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: keyvaultexplorer.linux-x64
-        path: keyvaultexplorer.linux-x64.tar    
+        name: KeyVaultExplorer-linux-x64
+        path: KeyVaultExplorer-linux-x64.tar.gz
 
   release:
-    name: Release code
+    name: Release
     needs: [ build_macos, build_windows, build_windows_arm, build_linux]
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - uses: actions/checkout@v4
       - name: Download built artifacts
         uses: actions/download-artifact@v4
-        with:
-          pattern: keyvaultexplorer.*
       - name: Create Release
         run: |
-          Get-ChildItem -Recurse
-          $runNum = "${{ github.run_number }}"
-          $tag = "v1.0.$runNum"
-          gh release create $tag --title $tag --notes "Azure CLI auth, multi-tenant support, RBAC/firewall fix buttons"
-          gh release upload $tag "./keyvaultexplorer.win-x64/keyvaultexplorer.win-x64.tar" "./keyvaultexplorer.win-arm64/keyvaultexplorer.win-arm64.tar" "./keyvaultexplorer.osx-arm64/keyvaultexplorer.osx-arm64.tar" "./keyvaultexplorer.linux-x64/keyvaultexplorer.linux-x64.tar"
+          TAG="v1.0.${{ github.run_number }}"
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "## Downloads
+
+          | Platform | File |
+          |----------|------|
+          | macOS (Apple Silicon) | KeyVaultExplorer-macOS-arm64.zip |
+          | Windows x64 | KeyVaultExplorer-win-x64.zip |
+          | Windows ARM | KeyVaultExplorer-win-arm64.zip |
+          | Linux x64 | KeyVaultExplorer-linux-x64.tar.gz |
+
+          ### macOS Install
+          1. Download and unzip
+          2. Drag **Key Vault Explorer.app** to Applications
+          3. If blocked: \`xattr -cr /Applications/Key\\ Vault\\ Explorer.app\`
+
+          ### Prerequisites
+          - [Azure CLI](https://aka.ms/installazurecli) installed
+          - Run \`az login\` (or the app will prompt you via browser)" \
+            ./KeyVaultExplorer-macOS-arm64/KeyVaultExplorer-macOS-arm64.zip \
+            ./KeyVaultExplorer-win-x64/KeyVaultExplorer-win-x64.zip \
+            ./KeyVaultExplorer-win-arm64/KeyVaultExplorer-win-arm64.zip \
+            ./KeyVaultExplorer-linux-x64/KeyVaultExplorer-linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
-      
-      
-
-        
