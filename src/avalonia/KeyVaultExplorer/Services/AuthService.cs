@@ -203,19 +203,35 @@ public class AuthService
     {
         try
         {
-            var args = "login";
+            var azArgs = "login";
             if (!string.IsNullOrEmpty(tenantId))
-                args += $" --tenant {tenantId}";
+                azArgs += $" --tenant {tenantId}";
 
-            var psi = new ProcessStartInfo
+            ProcessStartInfo psi;
+            if (OperatingSystem.IsWindows())
             {
-                FileName = GetAzCliPath(),
-                Arguments = args,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = false
-            };
+                psi = new ProcessStartInfo
+                {
+                    FileName = "az.cmd",
+                    Arguments = azArgs,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = false
+                };
+            }
+            else
+            {
+                psi = new ProcessStartInfo
+                {
+                    FileName = "/bin/bash",
+                    Arguments = $"-l -c \"az {azArgs}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = false
+                };
+            }
 
             using var process = Process.Start(psi);
             if (process is null)
@@ -271,15 +287,33 @@ public class AuthService
 
     public static async Task<(int ExitCode, string Output)> RunAzCommandAsync(string arguments)
     {
-        var psi = new ProcessStartInfo
+        ProcessStartInfo psi;
+
+        if (OperatingSystem.IsWindows())
         {
-            FileName = GetAzCliPath(),
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
+            psi = new ProcessStartInfo
+            {
+                FileName = "az.cmd",
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+        }
+        else
+        {
+            // Use login shell so .app bundles get the user's full PATH (homebrew, python, etc.)
+            psi = new ProcessStartInfo
+            {
+                FileName = "/bin/bash",
+                Arguments = $"-l -c \"az {arguments}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+        }
 
         using var process = Process.Start(psi);
         if (process is null)
