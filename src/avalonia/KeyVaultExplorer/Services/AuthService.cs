@@ -238,13 +238,26 @@ public class AuthService
             if (process is null)
                 return false;
 
-            var stderr = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            // Read streams concurrently, wait with timeout
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
 
-            // "No subscriptions found" means auth succeeded but tenant has no subs -- still a success
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            try
+            {
+                await process.WaitForExitAsync(cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(); } catch { }
+                return false;
+            }
+
+            var stderr = await stderrTask;
+
+            // "No subscriptions found" means auth succeeded but tenant has no subs
             if (process.ExitCode == 0 || stderr.Contains("No subscriptions found"))
             {
-                // Re-initialize after successful login
                 if (!string.IsNullOrEmpty(tenantId))
                     await SwitchTenantAsync(tenantId);
                 else

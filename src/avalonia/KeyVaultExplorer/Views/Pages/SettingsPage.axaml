@@ -155,18 +155,24 @@
                     Margin="-10,1"
                     Content="Source Code"
                     Foreground="{DynamicResource AccentTextFillColorTertiaryBrush}"
-                    NavigateUri="https://github.com/cricketthomas/AzureKeyVaultExplorer"
+                    NavigateUri="https://github.com/IstvanCsVarga/AzureKeyVaultExplorer"
                     Theme="{StaticResource TransparentButton}" />
                 <HyperlinkButton
                     Margin="-10,1"
                     Content="Software License Terms"
                     Foreground="{DynamicResource AccentTextFillColorTertiaryBrush}"
-                    NavigateUri="https://github.com/cricketthomas/AzureKeyVaultExplorer/blob/master/LICENSE"
+                    NavigateUri="https://github.com/IstvanCsVarga/AzureKeyVaultExplorer/blob/master/LICENSE"
+                    Theme="{StaticResource TransparentButton}" />
+                <HyperlinkButton
+                    Margin="-10,1"
+                    Content="Upstream (Original)"
+                    Foreground="{DynamicResource AccentTextFillColorTertiaryBrush}"
+                    NavigateUri="https://github.com/cricketthomas/AzureKeyVaultExplorer"
                     Theme="{StaticResource TransparentButton}" />
                 <Button
                     Margin="0,10"
                     Command="{Binding OpenIssueGithubCommand}"
-                    Content="Send Feedback" />
+                    Content="Report Issue" />
             </StackPanel>
         </Grid>
     </ScrollViewer>

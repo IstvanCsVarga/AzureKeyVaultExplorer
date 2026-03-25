@@ -591,14 +591,80 @@ public partial class VaultPageViewModel : ViewModelBase
             }
 
             var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
+            // Fuzzy search: split by spaces, all terms must match somewhere in the item
+            var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (terms.Length == 0)
+                return new ObservableCollection<T>(source);
+
             var filtered = source.Where(item =>
-                (nameSelector(item)?.Contains(query, comparison) ?? false)
-                || (contentTypeSelector(item)?.Contains(query, comparison) ?? false)
-                || (tagsSelector(item)?.Any(tag =>
-                    (tag.Key?.Contains(query, comparison) ?? false)
-                    || (tag.Value?.Contains(query, comparison) ?? false)) ?? false));
+            {
+                var name = nameSelector(item) ?? "";
+                var contentType = contentTypeSelector(item) ?? "";
+                var tags = tagsSelector(item);
+                var tagText = tags is not null
+                    ? string.Join(" ", tags.Select(t => $"{t.Key} {t.Value}"))
+                    : "";
+                var allText = $"{name} {contentType} {tagText}";
+
+                // Every term must match: exact substring OR fuzzy (within edit distance)
+                return terms.All(term =>
+                    allText.Contains(term, comparison) || FuzzyContains(allText, term, caseSensitive));
+            });
 
             return new ObservableCollection<T>(filtered);
+        }
+
+        /// <summary>
+        /// Checks if any segment of the text fuzzy-matches the term (Levenshtein distance).
+        /// Splits text by common delimiters and checks each word.
+        /// </summary>
+        private static bool FuzzyContains(string text, string term, bool caseSensitive)
+        {
+            if (term.Length < 3) return false; // too short for fuzzy, exact only
+
+            var maxDistance = term.Length <= 4 ? 1 : 2; // allow 1 typo for short terms, 2 for longer
+            var words = text.Split(['-', '_', '.', ' ', '/', ':'], StringSplitOptions.RemoveEmptyEntries);
+
+            var compareTerm = caseSensitive ? term : term.ToLowerInvariant();
+
+            foreach (var word in words)
+            {
+                var compareWord = caseSensitive ? word : word.ToLowerInvariant();
+                if (LevenshteinDistance(compareWord, compareTerm) <= maxDistance)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Computes Levenshtein edit distance between two strings.
+        /// </summary>
+        private static int LevenshteinDistance(string a, string b)
+        {
+            if (a.Length == 0) return b.Length;
+            if (b.Length == 0) return a.Length;
+
+            // Early exit if length difference exceeds possible match
+            if (Math.Abs(a.Length - b.Length) > 2) return Math.Abs(a.Length - b.Length);
+
+            var prev = new int[b.Length + 1];
+            var curr = new int[b.Length + 1];
+
+            for (var j = 0; j <= b.Length; j++)
+                prev[j] = j;
+
+            for (var i = 1; i <= a.Length; i++)
+            {
+                curr[0] = i;
+                for (var j = 1; j <= b.Length; j++)
+                {
+                    var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+                }
+                (prev, curr) = (curr, prev);
+            }
+            return prev[b.Length];
         }
     }
 }

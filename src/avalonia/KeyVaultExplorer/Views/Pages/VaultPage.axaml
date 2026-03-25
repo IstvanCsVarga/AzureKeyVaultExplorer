@@ -167,6 +167,24 @@
                             </MenuFlyout>
                         </DropDownButton.Flyout>
                     </DropDownButton>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="1" Margin="2,0,0,0">
+                        <ToggleButton
+                            Width="28" Height="24"
+                            Padding="4,2"
+                            VerticalAlignment="Center"
+                            IsChecked="{Binding IsCaseSensitive, Mode=TwoWay}"
+                            ToolTip.Tip="Match Case">
+                            <TextBlock FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Text="Aa" />
+                        </ToggleButton>
+                        <ToggleButton
+                            Width="28" Height="24"
+                            Padding="4,2"
+                            VerticalAlignment="Center"
+                            IsChecked="{Binding IsRegexEnabled, Mode=TwoWay}"
+                            ToolTip.Tip="Use Regular Expression">
+                            <TextBlock FontSize="11" FontWeight="Bold" HorizontalAlignment="Center" Text=".*" />
+                        </ToggleButton>
+                    </StackPanel>
                     <TextBox
                         Name="SearchTextBox"
                         HorizontalAlignment="Stretch"
@@ -176,57 +194,11 @@
                         Classes.IsSmall="True"
                         Classes.clearButton="True"
                         ClipToBounds="True"
-                        DockPanel.Dock="Right"
                         HotKeyManager.HotKey="Ctrl+F"
                         Text="{Binding SearchQuery, Mode=TwoWay}"
                         TextChanged="SearchBoxChanges"
                         TextWrapping="NoWrap"
-                        Watermark="Search names, tags, content types (Ctrl+F)">
-                        <TextBox.Styles>
-                            <Style Selector="TextBox">
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="InnerRightContent">
-                                    <Template>
-                                        <StackPanel Orientation="Horizontal" Spacing="1">
-                                            <ToggleButton
-                                                Width="26" Height="22"
-                                                Padding="2"
-                                                VerticalAlignment="Center"
-                                                IsChecked="{Binding IsCaseSensitive, Mode=TwoWay}"
-                                                Theme="{StaticResource TransparentButton}"
-                                                ToolTip.Tip="Match Case">
-                                                <TextBlock FontSize="12" FontWeight="Bold" Text="Aa" />
-                                            </ToggleButton>
-                                            <ToggleButton
-                                                Width="26" Height="22"
-                                                Padding="2"
-                                                VerticalAlignment="Center"
-                                                IsChecked="{Binding IsRegexEnabled, Mode=TwoWay}"
-                                                Theme="{StaticResource TransparentButton}"
-                                                ToolTip.Tip="Use Regular Expression">
-                                                <TextBlock FontSize="12" FontWeight="Bold" Text=".*" />
-                                            </ToggleButton>
-                                            <Button
-                                                Command="{Binding $parent[TextBox].Clear}"
-                                                Content="&#xE8BB;"
-                                                FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                IsVisible="{Binding Text, RelativeSource={RelativeSource FindAncestor, AncestorType=TextBox}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                                RenderOptions.TextRenderingMode="SubpixelAntialias"
-                                                Theme="{StaticResource TransparentButton}" />
-                                            <Button
-                                                Command="{Binding $parent[TextBox].Clear}"
-                                                Content="&#xE721;"
-                                                FontFamily="{StaticResource SymbolThemeFontFamily}"
-                                                IsHitTestVisible="False"
-                                                RenderOptions.TextRenderingMode="SubpixelAntialias"
-                                                Theme="{StaticResource TransparentButton}" />
-                                        </StackPanel>
-                                    </Template>
-                                </Setter>
-                            </Style>
-                        </TextBox.Styles>
-                    </TextBox>
-
+                        Watermark="Search (Ctrl+F) - space separated for fuzzy" />
 
                 </DockPanel>
 

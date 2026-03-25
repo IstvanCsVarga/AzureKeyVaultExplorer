@@ -122,7 +122,26 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
                 catch (Exception ex)
                 {
                     Debug.Write(ex);
-                    Dispatcher.UIThread.Post(() => _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification { Message = ex.Message, Title = "Error" }), DispatcherPriority.Background);
+                    var msg = ex.Message;
+                    var isAuthError = msg.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("AADSTS", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("AzureCliCredential", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("multi-factor", StringComparison.OrdinalIgnoreCase)
+                        || msg.Contains("az login", StringComparison.OrdinalIgnoreCase);
+
+                    if (isAuthError)
+                    {
+                        Dispatcher.UIThread.Post(() => _notificationViewModel.AddMessage(new Avalonia.Controls.Notifications.Notification
+                        {
+                            Title = "Authentication Required",
+                            Message = "Sign in failed or expired. Click refresh or select the tenant again to retry.",
+                            Type = Avalonia.Controls.Notifications.NotificationType.Warning
+                        }), DispatcherPriority.Background);
+                    }
+                    else
+                    {
+                        Dispatcher.UIThread.Post(() => _notificationViewModel.ShowPopup(new Avalonia.Controls.Notifications.Notification { Message = msg, Title = "Error" }), DispatcherPriority.Background);
+                    }
                 }
             });
         });

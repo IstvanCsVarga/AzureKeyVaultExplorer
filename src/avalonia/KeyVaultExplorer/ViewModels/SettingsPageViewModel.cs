@@ -193,7 +193,7 @@ public partial class SettingsPageViewModel : ViewModelBase
     [RelayCommand]
     private void OpenIssueGithub()
     {
-        Process.Start(new ProcessStartInfo("https://github.com/cricketthomas/KeyVaultExplorer/issues/new") { UseShellExecute = true, Verb = "open" });
+        Process.Start(new ProcessStartInfo("https://github.com/IstvanCsVarga/AzureKeyVaultExplorer/issues/new") { UseShellExecute = true, Verb = "open" });
     }
 
 

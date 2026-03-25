@@ -60,13 +60,37 @@ public partial class MainViewModel : ViewModelBase
     {
         if (!_authService.IsAuthenticated && SelectedTenant is not null)
         {
-            await SwitchTenantCommand.ExecuteAsync(SelectedTenant);
+            // Force re-login via browser
+            IsLoggingIn = true;
+            _notificationViewModel.AddMessage(new Notification
+            {
+                Title = "Signing In",
+                Message = $"Opening browser for {SelectedTenant.DisplayName}...",
+                Type = NotificationType.Information
+            });
+
+            var success = await _authService.LaunchAzLoginAsync(SelectedTenant.TenantId);
+            IsLoggingIn = false;
+
+            if (success)
+            {
+                AuthenticatedUserClaims = _authService.AuthenticatedUserClaims;
+                IsAuthenticated = _authService.IsAuthenticated;
+            }
+            else
+            {
+                _notificationViewModel.AddMessage(new Notification
+                {
+                    Title = "Login Required",
+                    Message = "Complete the browser login to continue",
+                    Type = NotificationType.Warning
+                });
+                return;
+            }
         }
-        else
-        {
-            var treeVm = Defaults.Locator.GetRequiredService<KeyVaultTreeListViewModel>();
-            await treeVm.GetAvailableKeyVaultsCommand.ExecuteAsync(true);
-        }
+
+        var treeVm = Defaults.Locator.GetRequiredService<KeyVaultTreeListViewModel>();
+        await treeVm.GetAvailableKeyVaultsCommand.ExecuteAsync(true);
     }
 
     public MainViewModel()
@@ -78,6 +102,9 @@ public partial class MainViewModel : ViewModelBase
 
     public async Task RefreshTokenAndGetAccountInformation()
     {
+        IsLoggingIn = true;
+        try
+        {
         var cliAvailable = await _authService.CheckAzureCliAvailableAsync();
         if (!cliAvailable)
         {
@@ -116,14 +143,20 @@ public partial class MainViewModel : ViewModelBase
                 Type = NotificationType.Success
             });
         }
-        else
+        else if (tenants.Count == 0)
         {
+            // Only show "Not Signed In" if we couldn't discover any tenants at all
             _notificationViewModel.AddMessage(new Notification
             {
                 Title = "Not Signed In",
                 Message = "Use Account > Azure CLI Login to sign in",
                 Type = NotificationType.Warning
             });
+        }
+        }
+        finally
+        {
+            IsLoggingIn = false;
         }
     }
 
@@ -230,13 +263,14 @@ public partial class MainViewModel : ViewModelBase
                 });
 
                 var loginSuccess = await _authService.LaunchAzLoginAsync(tenant.TenantId);
+                IsLoggingIn = false; // Stop spinner immediately after az login exits
                 if (!loginSuccess)
                 {
                     _notificationViewModel.AddMessage(new Notification
                     {
-                        Title = "Login Failed",
-                        Message = $"Could not authenticate to {tenant.DisplayName}",
-                        Type = NotificationType.Error
+                        Title = "Login Interrupted",
+                        Message = $"Sign in to {tenant.DisplayName} was not completed. Click refresh or select the tenant to retry.",
+                        Type = NotificationType.Warning
                     });
                     return;
                 }

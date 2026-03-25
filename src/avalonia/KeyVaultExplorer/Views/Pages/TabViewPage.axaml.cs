@@ -20,6 +20,27 @@ public partial class TabViewPage : UserControl
         InitializeComponent();
         DataContext = Defaults.Locator.GetRequiredService<TabViewPageViewModel>();
         AddHandler(PaneToggledRoutedEvent, OnPaneToggledRoutedEvent, RoutingStrategies.Tunnel, handledEventsToo: false);
+
+        // Bind center loading panel to MainViewModel.IsLoggingIn
+        Loaded += (_, _) =>
+        {
+            var mainVm = Defaults.Locator.GetRequiredService<MainViewModel>();
+            var loadingPanel = this.FindControl<Grid>("CenterLoadingPanel");
+            var mainGrid = this.FindControl<Grid>("MainGrid2");
+            if (loadingPanel is null || mainVm is null) return;
+
+            mainVm.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(MainViewModel.IsLoggingIn))
+                {
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        loadingPanel.IsVisible = mainVm.IsLoggingIn;
+                        if (mainGrid is not null) mainGrid.IsVisible = !mainVm.IsLoggingIn;
+                    });
+                }
+            };
+        };
     }
 
     private void OnPaneToggledRoutedEvent(object? sender, RoutedEventArgs e)

@@ -165,7 +165,28 @@
             </ui:TabView>
 
 
-            <Grid Name="MainGrid2" RowDefinitions="*,18">
+            <!-- Center loading overlay - visible by default, hidden when loading completes -->
+            <Grid Name="CenterLoadingPanel"
+                  IsVisible="True"
+                  ZIndex="10">
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Orientation="Vertical"
+                    Spacing="12">
+                    <ui:ProgressRing
+                        Width="40" Height="40"
+                        HorizontalAlignment="Center"
+                        IsIndeterminate="True" />
+                    <TextBlock
+                        Name="CenterLoadingText"
+                        HorizontalAlignment="Center"
+                        Foreground="#ababab"
+                        Text="Loading..." />
+                </StackPanel>
+            </Grid>
+
+            <Grid Name="MainGrid2" RowDefinitions="*,18" IsVisible="False">
                 <StackPanel
                     VerticalAlignment="Stretch"
                     IsVisible="{Binding !Documents.Count}"
@@ -191,7 +212,7 @@
                         Opacity=".15"
                         RenderOptions.BitmapInterpolationMode="HighQuality"
                         Source="avares://KeyVaultExplorer/Assets/kv-gray.png" />
-                    <StackPanel HorizontalAlignment="Center">
+                    <StackPanel Name="EmptyStatePanel" HorizontalAlignment="Center">
                         <StackPanel.Styles>
                             <Style Selector="TextBlock">
                                 <Setter Property="Foreground" Value="#ababab" />
