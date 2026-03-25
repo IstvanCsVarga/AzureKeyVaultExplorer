@@ -109,3 +109,18 @@ The vault tree shows Subscription -> Key Vaults directly (no resource group nest
 - **Don't auto-launch `az login` on startup** -- it blocks the UI thread and prevents the window from showing
 - **Always read stderr from az processes** -- az writes warnings/errors to stderr; not reading it causes process deadlock
 - **Test with .app bundle, not just `dotnet run`** -- the Finder launch environment is very different from terminal
+- **`az login` hangs after browser close** -- the process waits for OAuth callback indefinitely. Use `WaitForExitAsync` with a `CancellationTokenSource` timeout (2 min)
+- **`az login --tenant` returns non-zero for tenants with no subscriptions** -- check stderr for "No subscriptions found" and treat as success
+- **`az account list` returns null tenant names** -- use `az rest` against ARM tenants API (`/tenants?api-version=2022-12-01`) for proper display names
+- **ToggleButtons in TextBox InnerRightContent disappear** -- Avalonia's TextBox template replaces inner content. Put toggle buttons outside the TextBox in the DockPanel instead
+- **`IsLoggingIn` must be set before any async work on startup** -- otherwise the loading spinner misses the initial load. Set `CenterLoadingPanel.IsVisible=True` as XAML default
+- **Don't show "Not Signed In" if tenants were discovered** -- `InitializeAsync` can fail for the saved tenant but the user IS logged in. Only show when `tenants.Count == 0`
+
+## Search System
+
+The vault search (`VaultPageViewModel.KeyVaultFilterHelper`) supports three modes:
+1. **Fuzzy (default)**: space-separated terms, all must match. Includes Levenshtein typo tolerance (1 edit for short terms, 2 for 5+ chars)
+2. **Regex** (`.*` toggle): full .NET regex with timeout protection
+3. **Case sensitive** (`Aa` toggle): works with both fuzzy and regex modes
+
+Fuzzy search splits item text by `-_. /:` delimiters and compares each segment against query terms using Levenshtein distance.
