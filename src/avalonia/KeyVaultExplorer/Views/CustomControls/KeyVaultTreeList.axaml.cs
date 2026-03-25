@@ -85,10 +85,10 @@ public partial class KeyVaultTreeList : UserControl
     {
         Dispatcher.UIThread.Post(async () =>
         {
-            await (DataContext as KeyVaultTreeListViewModel)!.GetAvailableKeyVaultsCommand.ExecuteAsync(true).ContinueWith((t) =>
-             {
-                 ((Control)sender)!.RaiseEvent(new RoutedEventArgs(MainView.SignInRoutedEvent));
-             });
+            // If not authenticated, retry auth first (opens browser), then refresh
+            var mainVm = Defaults.Locator.GetRequiredService<MainViewModel>();
+            await mainVm.RetryAuthAndRefresh();
+            ((Control)sender)!.RaiseEvent(new RoutedEventArgs(MainView.SignInRoutedEvent));
         }, DispatcherPriority.Input);
     }
 

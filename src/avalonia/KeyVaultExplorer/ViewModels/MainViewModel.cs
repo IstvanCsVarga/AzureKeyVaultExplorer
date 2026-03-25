@@ -29,6 +29,9 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty]
     private TenantInfo selectedTenant;
 
+    [ObservableProperty]
+    private bool isLoggingIn = false;
+
     private readonly AuthService _authService;
     private readonly NotificationViewModel _notificationViewModel;
     private bool _suppressTenantSwitch = false;
@@ -43,9 +46,26 @@ public partial class MainViewModel : ViewModelBase
     partial void OnSelectedTenantChanged(TenantInfo value)
     {
         if (_suppressTenantSwitch || value is null) return;
-        if (value.TenantId != _authService.TenantId)
+        // Trigger switch if different tenant OR if same tenant but not authenticated
+        if (value.TenantId != _authService.TenantId || !_authService.IsAuthenticated)
         {
             _ = SwitchTenantCommand.ExecuteAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// Called by the refresh button to retry auth + reload if not authenticated.
+    /// </summary>
+    public async Task RetryAuthAndRefresh()
+    {
+        if (!_authService.IsAuthenticated && SelectedTenant is not null)
+        {
+            await SwitchTenantCommand.ExecuteAsync(SelectedTenant);
+        }
+        else
+        {
+            var treeVm = Defaults.Locator.GetRequiredService<KeyVaultTreeListViewModel>();
+            await treeVm.GetAvailableKeyVaultsCommand.ExecuteAsync(true);
         }
     }
 
@@ -180,6 +200,7 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
+            IsLoggingIn = true;
             _notificationViewModel.AddMessage(new Notification
             {
                 Title = "Switching Tenant",
@@ -243,6 +264,10 @@ public partial class MainViewModel : ViewModelBase
                 Message = ex.Message,
                 Type = NotificationType.Error
             });
+        }
+        finally
+        {
+            IsLoggingIn = false;
         }
     }
 }
