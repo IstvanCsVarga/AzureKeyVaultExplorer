@@ -17,6 +17,13 @@ public partial class KvSubscriptionModel : ObservableObject
     private bool isSelected;
 
     public ObservableCollection<KvResourceGroupModel> ResourceGroups { get; set; } = [];
+
+    /// <summary>
+    /// Flat list of key vaults for direct display (no RG nesting).
+    /// Falls back to ResourceGroups[0].KeyVaultResources for compatibility.
+    /// </summary>
+    public ObservableCollection<KeyVaultResource> KeyVaultResources { get; set; } = [];
+
     public SubscriptionResource Subscription { get; set; } = null!;
     public string SubscriptionDisplayName { get; set; } = null!;
     public string? SubscriptionId { get; set; }

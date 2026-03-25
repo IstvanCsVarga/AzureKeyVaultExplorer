@@ -187,7 +187,25 @@
                                 <Setter Property="Background" Value="Transparent" />
                                 <Setter Property="InnerRightContent">
                                     <Template>
-                                        <StackPanel Orientation="Horizontal">
+                                        <StackPanel Orientation="Horizontal" Spacing="1">
+                                            <ToggleButton
+                                                Width="26" Height="22"
+                                                Padding="2"
+                                                VerticalAlignment="Center"
+                                                IsChecked="{Binding IsCaseSensitive, Mode=TwoWay}"
+                                                Theme="{StaticResource TransparentButton}"
+                                                ToolTip.Tip="Match Case">
+                                                <TextBlock FontSize="12" FontWeight="Bold" Text="Aa" />
+                                            </ToggleButton>
+                                            <ToggleButton
+                                                Width="26" Height="22"
+                                                Padding="2"
+                                                VerticalAlignment="Center"
+                                                IsChecked="{Binding IsRegexEnabled, Mode=TwoWay}"
+                                                Theme="{StaticResource TransparentButton}"
+                                                ToolTip.Tip="Use Regular Expression">
+                                                <TextBlock FontSize="12" FontWeight="Bold" Text=".*" />
+                                            </ToggleButton>
                                             <Button
                                                 Command="{Binding $parent[TextBox].Clear}"
                                                 Content="&#xE8BB;"

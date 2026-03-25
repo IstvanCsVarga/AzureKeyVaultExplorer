@@ -163,11 +163,6 @@ public partial class VaultService
         var armClient = new ArmClient(_authService.Credential);
 
         var placeholder = new KeyVaultResourcePlaceholder();
-        var rgPlaceholder = new KvResourceGroupModel() //needed to show chevron
-        {
-            KeyVaultResources = [placeholder],
-            //ResourceGroupDisplayName = string.Empty
-        };
 
         var subscriptions = await _memoryCache.GetOrCreateAsync($"subscriptions_{_authService.TenantId}", async (f) =>
         {
@@ -194,7 +189,7 @@ public partial class VaultService
                 SubscriptionDisplayName = subscription.Data.DisplayName,
                 SubscriptionId = subscription.Data.Id,
                 Subscription = subscription,
-                ResourceGroups = [rgPlaceholder]
+                KeyVaultResources = [placeholder]
             };
             yield return resource;
         }

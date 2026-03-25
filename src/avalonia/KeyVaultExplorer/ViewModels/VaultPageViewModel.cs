@@ -65,6 +65,12 @@ public partial class VaultPageViewModel : ViewModelBase
     private string searchQuery;
 
     [ObservableProperty]
+    private bool isRegexEnabled = false;
+
+    [ObservableProperty]
+    private bool isCaseSensitive = false;
+
+    [ObservableProperty]
     private KeyVaultContentsAmalgamation selectedRow;
 
     [ObservableProperty]
@@ -186,7 +192,7 @@ public partial class VaultPageViewModel : ViewModelBase
         {
             var contents = item == KeyVaultItemType.All ? _vaultContents : _vaultContents.Where(x => item == x.Type);
 
-            VaultContents = KeyVaultFilterHelper.FilterByQuery(contents, SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType);
+            VaultContents = KeyVaultFilterHelper.FilterByQuery(contents, SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType, IsRegexEnabled, IsCaseSensitive);
 
             await DelaySetIsBusy(false);
         }
@@ -446,6 +452,9 @@ public partial class VaultPageViewModel : ViewModelBase
         LoadedItemTypes.TryAdd(type, true);
     }
 
+    partial void OnIsRegexEnabledChanged(bool value) => OnSearchQueryChanged(SearchQuery);
+    partial void OnIsCaseSensitiveChanged(bool value) => OnSearchQueryChanged(SearchQuery);
+
     partial void OnSearchQueryChanged(string value)
     {
         var isValidEnum = Enum.TryParse(SelectedTab?.Name.ToString(), true, out KeyVaultItemType parsedEnumValue) && Enum.IsDefined(typeof(KeyVaultItemType), parsedEnumValue);
@@ -462,7 +471,7 @@ public partial class VaultPageViewModel : ViewModelBase
             return;
         }
 
-        VaultContents = KeyVaultFilterHelper.FilterByQuery(item != KeyVaultItemType.All ? _vaultContents.Where(k => k.Type == item) : _vaultContents, value ?? SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType);
+        VaultContents = KeyVaultFilterHelper.FilterByQuery(item != KeyVaultItemType.All ? _vaultContents.Where(k => k.Type == item) : _vaultContents, value ?? SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType, IsRegexEnabled, IsCaseSensitive);
     }
 
     [RelayCommand]
@@ -482,7 +491,7 @@ public partial class VaultPageViewModel : ViewModelBase
         if (item.HasFlag(KeyVaultItemType.All))
             _vaultContents = [];
 
-        VaultContents = KeyVaultFilterHelper.FilterByQuery(_vaultContents.Where(v => v.Type != item), SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType);
+        VaultContents = KeyVaultFilterHelper.FilterByQuery(_vaultContents.Where(v => v.Type != item), SearchQuery, item => item.Name, item => item.Tags, item => item.ContentType, IsRegexEnabled, IsCaseSensitive);
 
         await FilterAndLoadVaultValueType(item);
     }
@@ -532,7 +541,7 @@ public partial class VaultPageViewModel : ViewModelBase
             Content = new PropertiesPage { DataContext = new PropertiesPageViewModel(model) },
             Width = 820,
             Height = 680,
-            ExtendClientAreaToDecorationsHint = true,
+            ExtendClientAreaToDecorationsHint = false,
             // TransparencyLevelHint = new List<WindowTransparencyLevel>() { WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur },
             // Background = null,
         };
@@ -548,21 +557,48 @@ public partial class VaultPageViewModel : ViewModelBase
             string query,
             Func<T, string> nameSelector,
             Func<T, IDictionary<string, string>> tagsSelector,
-            Func<T, string> contentTypeSelector)
+            Func<T, string> contentTypeSelector,
+            bool isRegex = false,
+            bool caseSensitive = false)
         {
             if (string.IsNullOrEmpty(query))
             {
                 return new ObservableCollection<T>(source);
             }
 
-            var filteredItems = source.Where(item =>
-                nameSelector(item).AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase)
-                || contentTypeSelector(item).AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase)
-                || (tagsSelector(item)?.Any(tag =>
-                    tag.Key.AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase)
-                    || tag.Value.AsSpan().Contains(query.AsSpan(), StringComparison.OrdinalIgnoreCase)) ?? false));
+            if (isRegex)
+            {
+                try
+                {
+                    var regexOptions = caseSensitive
+                        ? System.Text.RegularExpressions.RegexOptions.None
+                        : System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+                    var regex = new System.Text.RegularExpressions.Regex(query, regexOptions, TimeSpan.FromSeconds(1));
 
-            return new ObservableCollection<T>(filteredItems);
+                    var filteredItems = source.Where(item =>
+                        regex.IsMatch(nameSelector(item) ?? "")
+                        || regex.IsMatch(contentTypeSelector(item) ?? "")
+                        || (tagsSelector(item)?.Any(tag =>
+                            regex.IsMatch(tag.Key ?? "") || regex.IsMatch(tag.Value ?? "")) ?? false));
+
+                    return new ObservableCollection<T>(filteredItems);
+                }
+                catch (System.Text.RegularExpressions.RegexParseException)
+                {
+                    // Invalid regex -- return empty until user fixes it
+                    return new ObservableCollection<T>();
+                }
+            }
+
+            var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+            var filtered = source.Where(item =>
+                (nameSelector(item)?.Contains(query, comparison) ?? false)
+                || (contentTypeSelector(item)?.Contains(query, comparison) ?? false)
+                || (tagsSelector(item)?.Any(tag =>
+                    (tag.Key?.Contains(query, comparison) ?? false)
+                    || (tag.Value?.Contains(query, comparison) ?? false)) ?? false));
+
+            return new ObservableCollection<T>(filtered);
         }
     }
 }

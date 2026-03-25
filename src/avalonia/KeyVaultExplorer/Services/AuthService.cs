@@ -108,7 +108,8 @@ public class AuthService
     {
         try
         {
-            var (exitCode, output) = await RunAzCommandAsync("account list --query \"[].{tenantId:tenantId, name:tenantDisplayName}\" --output json");
+            // Use the ARM tenants API which returns proper display names for all tenants
+            var (exitCode, output) = await RunAzCommandAsync("rest --method get --url \"https://management.azure.com/tenants?api-version=2022-12-01\" --query \"value[].{tenantId:tenantId, displayName:displayName}\" --output json");
             if (exitCode != 0 || string.IsNullOrWhiteSpace(output))
                 return [];
 
@@ -120,11 +121,9 @@ public class AuthService
             if (tenants is null)
                 return [];
 
-            // Deduplicate by tenantId and build TenantInfo list
             return tenants
                 .Where(t => !string.IsNullOrEmpty(t.TenantId))
-                .GroupBy(t => t.TenantId)
-                .Select(g => new TenantInfo(g.Key, g.First().Name ?? g.Key))
+                .Select(t => new TenantInfo(t.TenantId, t.DisplayName ?? t.TenantId))
                 .OrderBy(t => t.DisplayName)
                 .ToList();
         }
@@ -225,21 +224,25 @@ public class AuthService
                 psi = new ProcessStartInfo
                 {
                     FileName = "/bin/bash",
-                    Arguments = $"-l -c \"az {azArgs}\"",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = false
                 };
+                psi.ArgumentList.Add("-l");
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add($"az {azArgs}");
             }
 
             using var process = Process.Start(psi);
             if (process is null)
                 return false;
 
+            var stderr = await process.StandardError.ReadToEndAsync();
             await process.WaitForExitAsync();
 
-            if (process.ExitCode == 0)
+            // "No subscriptions found" means auth succeeded but tenant has no subs -- still a success
+            if (process.ExitCode == 0 || stderr.Contains("No subscriptions found"))
             {
                 // Re-initialize after successful login
                 if (!string.IsNullOrEmpty(tenantId))
@@ -304,15 +307,18 @@ public class AuthService
         else
         {
             // Use login shell so .app bundles get the user's full PATH (homebrew, python, etc.)
+            // Use ArgumentList to avoid shell quoting issues
             psi = new ProcessStartInfo
             {
                 FileName = "/bin/bash",
-                Arguments = $"-l -c \"az {arguments}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
+            psi.ArgumentList.Add("-l");
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add($"az {arguments}");
         }
 
         using var process = Process.Start(psi);
@@ -332,6 +338,6 @@ public class AuthService
     private class TenantDiscoveryEntry
     {
         public string TenantId { get; set; }
-        public string Name { get; set; }
+        public string DisplayName { get; set; }
     }
 }

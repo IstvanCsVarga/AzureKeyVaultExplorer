@@ -211,6 +211,7 @@
             Grid.Row="2"
             HorizontalScrollBarVisibility="Auto"
             VerticalScrollBarVisibility="Visible">
+            <StackPanel>
             <TreeView
                 Name="SubscriptionTreeViewList"
                 VerticalAlignment="Top"
@@ -245,7 +246,7 @@
                     </Style>-->
                 </TreeView.Styles>
                 <TreeView.DataTemplates>
-                    <TreeDataTemplate DataType="models:KvSubscriptionModel" ItemsSource="{Binding ResourceGroups}">
+                    <TreeDataTemplate DataType="models:KvSubscriptionModel" ItemsSource="{Binding KeyVaultResources}">
                         <StackPanel
                             Name="SubscriptionFolder"
                             HorizontalAlignment="Stretch"
@@ -313,9 +314,32 @@
                     </DataTemplate>
                 </TreeView.DataTemplates>
             </TreeView>
+            <StackPanel
+                Margin="8,20"
+                HorizontalAlignment="Center"
+                Name="EmptyStateMessage"
+                IsVisible="{Binding ShowEmptyState}"
+                Orientation="Vertical"
+                Spacing="4">
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="{DynamicResource FontSizeSmall}"
+                    Foreground="#888"
+                    Text="No subscriptions or key vaults found" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="{DynamicResource FontSizeSmall}"
+                    Foreground="#888"
+                    Text="for this tenant." />
+                <TextBlock
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Center"
+                    FontSize="{DynamicResource FontSizeSmall}"
+                    Foreground="#666"
+                    Text="Try selecting a different tenant above." />
+            </StackPanel>
+            </StackPanel>
         </ScrollViewer>
-
-        <!--<Label IsVisible="{Binding !TreeViewList.Count() && #SearchTextBox.Length}"  Content="No Items or child items matched. "/>-->
     </Grid>
     <!--</TabItem>-->
     <!--<TabItem Header="Tab 2" IsEnabled="False">

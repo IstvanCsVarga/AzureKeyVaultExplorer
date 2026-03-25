@@ -8,6 +8,7 @@ using KeyVaultExplorer.Database;
 using KeyVaultExplorer.Models;
 using KeyVaultExplorer.Services;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -25,6 +26,9 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool isBusy = false;
+
+    [ObservableProperty]
+    private bool showEmptyState = false;
 
     [ObservableProperty]
     private string searchQuery;
@@ -92,13 +96,12 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
                         _treeViewList.Add(item);
                     }
 
-                    //pinned items, insert the item so it appears instantly, then replace it once it finishes process items from KV
+                    //pinned items
                     var quickAccess = new KvSubscriptionModel
                     {
                         SubscriptionDisplayName = "Quick Access",
                         SubscriptionId = "",
                         IsExpanded = true,
-                        ResourceGroups = [new KvResourceGroupModel { ResourceGroupDisplayName = string.Empty }],
                     };
 
                     _treeViewList.Insert(0, quickAccess);
@@ -109,21 +112,12 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
                     {
                         var kvr = armClient.GetKeyVaultResource(new ResourceIdentifier(item.KeyVaultId));
                         var kvrResponse = await kvr.GetAsync();
-                        //TODO: figure out why i can only have one or the other
-                        quickAccess.ResourceGroups[0].KeyVaultResources.Add(kvrResponse);
+                        quickAccess.KeyVaultResources.Add(kvrResponse);
                         quickAccess.PropertyChanged += KvSubscriptionModel_PropertyChanged;
                     }
-                    quickAccess.ResourceGroups[0].KeyVaultResources = SortService.SortKeyVaults(quickAccess.ResourceGroups[0].KeyVaultResources);
-                    
-                    quickAccess.ResourceGroups[0].ResourceGroupDisplayName = "Pinned";
-                    quickAccess.ResourceGroups[0].IsExpanded = true;
+                    quickAccess.KeyVaultResources = SortService.SortKeyVaults(quickAccess.KeyVaultResources);
 
                     _treeViewList[0] = quickAccess;
-
-                    foreach (var sub in _treeViewList)
-                    {
-                        sub.ResourceGroups.CollectionChanged += TreeViewSubNode_CollectionChanged;
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -141,6 +135,8 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
         Dispatcher.UIThread.Post(() => {
             TreeViewList = searched;
             SearchQuery = string.Empty;
+            // Show empty message if only Quick Access (no real subscriptions)
+            ShowEmptyState = _treeViewList.Count <= 1;
         }, DispatcherPriority.Background);
     }
 
@@ -187,21 +183,16 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
 
         await _dbContext.InsertQuickAccessItemAsync(qa);
 
-        TreeViewList[0].ResourceGroups[0].KeyVaultResources.Add(model);
-        
-        // Sort the quick access key vaults alphabetically
-        TreeViewList[0].ResourceGroups[0].KeyVaultResources = SortService.SortKeyVaults(TreeViewList[0].ResourceGroups[0].KeyVaultResources);
-        
+        TreeViewList[0].KeyVaultResources.Add(model);
+        TreeViewList[0].KeyVaultResources = SortService.SortKeyVaults(TreeViewList[0].KeyVaultResources);
+
         var quickAccess = new KvSubscriptionModel
         {
             SubscriptionDisplayName = "Quick Access",
             IsExpanded = true,
             SubscriptionId = "",
-            ResourceGroups = TreeViewList[0].ResourceGroups,
-            Subscription = null,
+            KeyVaultResources = TreeViewList[0].KeyVaultResources,
         };
-        quickAccess.ResourceGroups[0].ResourceGroupDisplayName = "Pinned";
-        quickAccess.ResourceGroups[0].IsExpanded = true;
         TreeViewList[0] = quickAccess;
     }
 
@@ -213,18 +204,14 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
 
         await _dbContext.DeleteQuickAccessItemByKeyVaultId(model.Id);
 
-        var rg = TreeViewList[0].ResourceGroups;
-        var items = new ObservableCollection<KeyVaultResource>(TreeViewList[0].ResourceGroups[0].KeyVaultResources.Where(s => s.Data.Id != model.Id));
-        rg[0].KeyVaultResources = items;
-        rg[0].ResourceGroupDisplayName = "Pinned";
+        var items = new ObservableCollection<KeyVaultResource>(TreeViewList[0].KeyVaultResources.Where(s => s.Data.Id != model.Id));
 
         var quickAccess = new KvSubscriptionModel
         {
             SubscriptionDisplayName = "Quick Access",
             IsExpanded = true,
             SubscriptionId = "",
-            ResourceGroups = rg,
-            Subscription = null,
+            KeyVaultResources = items,
         };
         TreeViewList[0] = quickAccess;
     }
@@ -283,25 +270,28 @@ public partial class KeyVaultTreeListViewModel : ViewModelBase
                 {
                     await DelaySetIsBusy(async () =>
                     {
-                        kvSubModel.ResourceGroups.Clear();
-                        var resourceGroups = _vaultService.GetResourceGroupBySubscription(kvSubModel);
+                        kvSubModel.KeyVaultResources.Clear();
 
-                        await foreach (var rg in resourceGroups)
+                        // Flat list: subscription -> key vaults directly
+                        var vaults = _vaultService.GetKeyVaultsBySubscription(kvSubModel);
+
+                        await foreach (var vault in vaults)
                         {
-                            kvSubModel.ResourceGroups.Add(
-                                new KvResourceGroupModel
-                                {
-                                    ResourceGroupDisplayName = rg.Data.Name,
-                                    ResourceGroupResource = rg,
-                                    KeyVaultResources = [placeholder]
-                                });
+                            kvSubModel.KeyVaultResources.Add(vault);
                         }
-                        
-                        // Sort the resource groups alphabetically
-                        kvSubModel.ResourceGroups = SortService.SortResourceGroups(kvSubModel.ResourceGroups);
-                        
+
+                        kvSubModel.KeyVaultResources = SortService.SortKeyVaults(kvSubModel.KeyVaultResources);
                         kvSubModel.HasSubNodeDataBeenFetched = true;
-                        kvSubModel.ResourceGroups.CollectionChanged += TreeViewSubNode_CollectionChanged;
+
+                        if (kvSubModel.KeyVaultResources.Count == 0)
+                        {
+                            _notificationViewModel.AddMessage(new Avalonia.Controls.Notifications.Notification
+                            {
+                                Title = "No Key Vaults",
+                                Message = $"No key vaults found in subscription '{kvSubModel.SubscriptionDisplayName}'",
+                                Type = Avalonia.Controls.Notifications.NotificationType.Information
+                            });
+                        }
                     });
                 }, DispatcherPriority.ContextIdle);
             }
