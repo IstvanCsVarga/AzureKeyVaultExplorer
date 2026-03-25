@@ -1,0 +1,9 @@
+# Default owner for everything
+* @IstvanCsVarga
+
+# Auth and security-sensitive code requires owner review
+src/avalonia/KeyVaultExplorer/Services/AuthService.cs @IstvanCsVarga
+src/avalonia/KeyVaultExplorer/Services/VaultService.cs @IstvanCsVarga
+
+# CI/CD
+.github/ @IstvanCsVarga

@@ -150,12 +150,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Download built artifacts
         uses: actions/download-artifact@v4
-      - name: Create Release
+      - name: Generate release notes
+        id: notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v1.0.${{ github.run_number }}
         run: |
-          TAG="v1.0.${{ github.run_number }}"
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "## Downloads
+          # Find the previous release tag for changelog generation
+          PREV_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+
+          # Generate auto changelog via GitHub API
+          if [ -n "$PREV_TAG" ]; then
+            AUTO_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="$TAG" \
+              -f target_commitish=master \
+              -f previous_tag_name="$PREV_TAG" \
+              --jq '.body' 2>/dev/null || echo "")
+          else
+            AUTO_NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="$TAG" \
+              -f target_commitish=master \
+              --jq '.body' 2>/dev/null || echo "")
+          fi
+
+          # Build combined notes
+          cat > /tmp/release-notes.md << 'INSTALL'
+          ## Downloads
 
           | Platform | File |
           |----------|------|
@@ -167,14 +187,31 @@ jobs:
           ### macOS Install
           1. Download and unzip
           2. Drag **Key Vault Explorer.app** to Applications
-          3. If blocked: \`xattr -cr /Applications/Key\\ Vault\\ Explorer.app\`
+          3. If blocked: `xattr -cr /Applications/Key\ Vault\ Explorer.app`
 
           ### Prerequisites
           - [Azure CLI](https://aka.ms/installazurecli) installed
-          - Run \`az login\` (or the app will prompt you via browser)" \
+          - Run `az login` (or the app will prompt you via browser)
+          INSTALL
+
+          # Strip leading whitespace from heredoc
+          sed -i 's/^          //' /tmp/release-notes.md
+
+          # Prepend auto-generated changelog if available
+          if [ -n "$AUTO_NOTES" ]; then
+            printf '%s\n\n---\n\n' "$AUTO_NOTES" | cat - /tmp/release-notes.md > /tmp/release-notes-full.md
+            mv /tmp/release-notes-full.md /tmp/release-notes.md
+          fi
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v1.0.${{ github.run_number }}
+        run: |
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file /tmp/release-notes.md \
             ./KeyVaultExplorer-macOS-arm64/KeyVaultExplorer-macOS-arm64.zip \
             ./KeyVaultExplorer-win-x64/KeyVaultExplorer-win-x64.zip \
             ./KeyVaultExplorer-win-arm64/KeyVaultExplorer-win-arm64.zip \
             ./KeyVaultExplorer-linux-x64/KeyVaultExplorer-linux-x64.tar.gz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

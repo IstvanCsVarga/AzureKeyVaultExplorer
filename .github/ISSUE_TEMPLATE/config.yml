@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/IstvanCsVarga/AzureKeyVaultExplorer/blob/master/SECURITY.md
+    about: "Do NOT open a public issue for security vulnerabilities. See SECURITY.md for reporting instructions."
+  - name: Questions & Discussion
+    url: https://github.com/IstvanCsVarga/AzureKeyVaultExplorer/discussions
+    about: "Ask questions, share ideas, or discuss the project."
